@@ -1,6 +1,6 @@
 edition = "2023";
 
-package UDataPacketCacheAPI.V1;
+package UDataPacketCacheServiceAPI.V1;
 
 /*!
  * A data stream identifier which is comprised of a network code,

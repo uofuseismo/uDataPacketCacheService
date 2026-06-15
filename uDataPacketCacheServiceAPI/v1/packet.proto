@@ -1,9 +1,9 @@
 edition = "2023";
 import "google/protobuf/timestamp.proto";
 
-package UDataPacketCacheAPI.V1;
+package UDataPacketCacheServiceAPI.V1;
 
-import "uDataPacketCacheAPI/v1/data_type.proto";
+import "uDataPacketCacheServiceAPI/v1/data_type.proto";
 
 /*!
  * A packet is a set of samples comprising a time series.
