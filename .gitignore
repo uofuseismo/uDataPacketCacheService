@@ -1,0 +1,6 @@
+version.hpp
+*swp
+*ini
+CMakeUserPresets.json
+setupDebug.sh
+build
