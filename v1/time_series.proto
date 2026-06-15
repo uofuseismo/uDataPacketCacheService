@@ -1,9 +1,9 @@
 edition = "2023";
 
-package UDataPacketCacheAPI.V1;
+package UDataPacketCacheServiceAPI.V1;
 
-import "uDataPacketCacheAPI/v1/stream_identifier.proto";
-import "uDataPacketCacheAPI/v1/packet.proto";
+import "uDataPacketCacheServiceAPI/v1/stream_identifier.proto";
+import "uDataPacketCacheServiceAPI/v1/packet.proto";
 
 /*!
  * @brief A time series is a collection of packets corresponding to the stream

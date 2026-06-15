@@ -1,11 +1,11 @@
 edition = "2023";
 
-package UDataPacketCacheAPI.V1;
+package UDataPacketCacheServiceAPI.V1;
 
-import "uDataPacketCacheAPI/v1/data_request.proto";
-import "uDataPacketCacheAPI/v1/bulk_data_request.proto";
-import "uDataPacketCacheAPI/v1/data_response.proto";
-import "uDataPacketCacheAPI/v1/bulk_data_response.proto";
+import "uDataPacketCacheServiceAPI/v1/data_request.proto";
+import "uDataPacketCacheServiceAPI/v1/bulk_data_request.proto";
+import "uDataPacketCacheServiceAPI/v1/data_response.proto";
+import "uDataPacketCacheServiceAPI/v1/bulk_data_response.proto";
 
 /*!
  * The data cache service stores recently acquired data packets and makes

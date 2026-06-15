@@ -1,7 +1,7 @@
 edition = "2023";
 
-package UDataPacketCacheAPI.V1;
-import "uDataPacketCacheAPI/v1/stream_identifier.proto";
+package UDataPacketCacheServiceAPI.V1;
+import "uDataPacketCacheServiceAPI/v1/stream_identifier.proto";
 
 /*!
  * Requests time series data from multiple streams simultaneously.  This is a

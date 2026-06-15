@@ -1,7 +1,7 @@
 edition = "2023";
 
-package UDataPacketCacheAPI.V1;
-import "uDataPacketCacheAPI/v1/data_response.proto";
+package UDataPacketCacheServiceAPI.V1;
+import "uDataPacketCacheServiceAPI/v1/data_response.proto";
 
 /*!
  * The time series corresponding to the data requests.
