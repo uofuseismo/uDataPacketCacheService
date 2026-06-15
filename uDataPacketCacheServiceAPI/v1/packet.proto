@@ -1,0 +1,17 @@
+edition = "2023";
+import "google/protobuf/timestamp.proto";
+
+package UDataPacketCacheAPI.V1;
+
+import "uDataPacketCacheAPI/v1/data_type.proto";
+
+/*!
+ * A packet is a set of samples comprising a time series.
+ */ 
+message Packet {
+   google.protobuf.Timestamp start_time = 1; /// The packet's start time (UTC).
+   double sampling_rate = 2; /// The sampling rate in Hz.
+   DataType data_type = 3; /// The data type.
+   uint32 number_of_samples = 4; /// The number of samples.
+   bytes data = 5; /// The data.  This is always stored in little endian.
+}
