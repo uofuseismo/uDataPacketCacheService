@@ -1,0 +1,15 @@
+edition = "2023";
+
+package UDataPacketCacheAPI.V1;
+
+import "uDataPacketCacheAPI/v1/stream_identifier.proto";
+import "uDataPacketCacheAPI/v1/packet.proto";
+
+/*!
+ * @brief A time series is a collection of packets corresponding to the stream
+ *        identifier.
+ */
+message TimeSeries {
+   StreamIdentifier stream_identifier = 1; /// The stream identifier.
+   repeated Packet packets = 2; /// The packets defining the time series.  These are sorted by start time.
+}

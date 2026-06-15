@@ -1,0 +1,15 @@
+edition = "2023";
+import "google/protobuf/timestamp.proto";
+
+package UDataPacketCacheAPI.V1;
+import "uDataPacketCacheAPI/v1/stream_identifier.proto";
+
+/*!
+ * Requests time series data from a specific stream.
+ */
+message DataRequest {
+   string identifier = 1 [default = ""];      /// A request identifier.
+   StreamIdentifier stream_identifier = 2;    /// The desired stream.
+   google.protobuf.Timestamp start_time = 3;  /// The start time of the request.
+   google.protobuf.Timestamp end_time = 4;    /// The end time of the request.
+}

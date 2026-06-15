@@ -1,0 +1,13 @@
+edition = "2023";
+
+package UDataPacketCacheAPI.V1;
+import "uDataPacketCacheAPI/v1/data_response.proto";
+
+/*!
+ * The time series corresponding to the data requests.
+ */
+message DataResponse {
+   string identifier = 1 [default = ""]; /// The input data request identifier.
+   repeated DataResponse data_response;  /// The responses corresponding to the input requests.
+}
+

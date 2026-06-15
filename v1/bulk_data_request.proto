@@ -1,0 +1,15 @@
+edition = "2023";
+
+package UDataPacketCacheAPI.V1;
+import "uDataPacketCacheAPI/v1/stream_identifier.proto";
+
+/*!
+ * Requests time series data from multiple streams simultaneously.  This is a
+ * better strategy than repeatededly calling the API with individual data
+ * requests.
+ */
+message BulkDataRequest {
+   string identifier = 1 [default = ""];      /// A request identifier.
+   repeated DataRequest data_requests;        /// The data requests - duplicates will be ignored.
+}
+
