@@ -13,6 +13,6 @@ Checks:             '-*,bugprone-*,
                     '
 WarningsAsErrors: false
 HeaderFileExtensions: ['h','hh','hpp','hxx']
-HeaderFilterRegex: 'include/uDataPacketCache/.*ServiceAPI.*(?<!\.pb\.h)$'
+#HeaderFilterRegex: 'include/uDataPacketCache/.*ServiceAPI.*(?<!\.pb\.h)$'
 InheritParentConfig: true
 ...

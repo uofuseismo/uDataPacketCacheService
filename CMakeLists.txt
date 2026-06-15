@@ -75,11 +75,23 @@ set(LIBRARY_SRC
     src/version.cpp)
 set(LIBRARY_HEADER_FILES
     include/uDataPacketCacheService/version.hpp)
+set(IMPORT_PROTO_SRC
+    uDataPacketServiceAPI/v1/data_type.proto
+    uDataPacketServiceAPI/v1/stream_identifier.proto
+    uDataPacketServiceAPI/v1/packet.proto
+    uDataPacketServiceAPI/v1/subscribe_to_all_request.proto
+    uDataPacketServiceAPI/v1/subscription_request.proto
+    uDataPacketServiceAPI/v1/broadcast.proto)
+set(SERVICE_PROTO_SRC
+    uDataPacketCacheServiceAPI/v1/data_type.proto
+    uDataPacketCacheServiceAPI/v1/stream_identifier.proto
+    uDataPacketCacheServiceAPI/v1/packet.proto
+   )
 
 if (BUILD_SHARED_LIBS)
-   add_library(libuDataPacketCacheService STATIC ${LIBRARY_SRC})# ${IMPORT_PROTO_SRC} ${EXPORT_PROTO_SRC})
+   add_library(libuDataPacketCacheService SHARED ${LIBRARY_SRC} ${IMPORT_PROTO_SRC} ${SERVICE_PROTO_SRC})
 else()
-   add_library(libuDataPacketCacheService STATIC ${LIBRARY_SRC})# ${IMPORT_PROTO_SRC} ${EXPORT_PROTO_SRC})
+   add_library(libuDataPacketCacheService STATIC ${LIBRARY_SRC} ${IMPORT_PROTO_SRC} ${SERVICE_PROTO_SRC})
 endif()
 add_library(uDataPacketCacheService::libuDataPacketCacheService ALIAS libuDataPacketCacheService)
 set_target_properties(libuDataPacketCacheService PROPERTIES
@@ -103,21 +115,21 @@ target_sources(libuDataPacketCacheService
                          ${CMAKE_CURRENT_BINARY_DIR}/include
                       FILES
                          ${LIBRARY_HEADER_FILES})
-#protobuf_generate(TARGET libuDataPacketCacheService
-#                  LANGUAGE cpp
-#                  OUT_VAR PROTO_GENERATED_CXX_FILES
-#                 )
-#protobuf_generate(TARGET libuDataPacketCacheService
-#                  LANGUAGE grpc
-#                  PLUGIN "protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
-#                  PLUGIN_OPTIONS generate_mock_code=true
-#                  GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
-#                  OUT_VAR PROTO_GENERATED_FILES
-#                 )
-#set_source_files_properties(${PROTO_GENERATED_FILES} ${PROTO_GENERATED_CXX_FILES}
-#   PROPERTIES
-#      SKIP_LINTING ON
-#)
+protobuf_generate(TARGET libuDataPacketCacheService
+                  LANGUAGE cpp
+                  OUT_VAR PROTO_GENERATED_CXX_FILES
+                 )
+protobuf_generate(TARGET libuDataPacketCacheService
+                  LANGUAGE grpc
+                  PLUGIN "protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+                  PLUGIN_OPTIONS generate_mock_code=true
+                  GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+                  OUT_VAR PROTO_GENERATED_FILES
+                 )
+set_source_files_properties(${PROTO_GENERATED_FILES} ${PROTO_GENERATED_CXX_FILES}
+   PROPERTIES
+      SKIP_LINTING ON
+)
 
 add_executable(uDataPacketCacheService
                src/main.cpp)
