@@ -72,8 +72,15 @@ configure_file(${CMAKE_SOURCE_DIR}/src/version.hpp.in
                ${CMAKE_SOURCE_DIR}/include/uDataPacketCacheService/version.hpp)
 
 set(LIBRARY_SRC
+    src/circularBuffer.cpp
+    src/circularBufferMap.cpp
+    src/circularBufferOptions.cpp
+    src/utilities.cpp
     src/version.cpp)
 set(LIBRARY_HEADER_FILES
+    include/uDataPacketCacheService/circularBuffer.hpp
+    include/uDataPacketCacheService/circularBufferOptions.hpp
+    include/uDataPacketCacheService/utilities.hpp
     include/uDataPacketCacheService/version.hpp)
 set(IMPORT_PROTO_SRC
     uDataPacketServiceAPI/v1/data_type.proto
@@ -105,7 +112,8 @@ target_include_directories(libuDataPacketCacheService
                            PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
                            PUBLIC  $<INSTALL_INTERFACE:>)
 target_link_libraries(libuDataPacketCacheService
-                      PRIVATE protobuf::libprotobuf
+                      PRIVATE Boost::headers
+                              protobuf::libprotobuf
                               spdlog::spdlog_header_only
                               gRPC::grpc gRPC::grpc++)
 target_sources(libuDataPacketCacheService
@@ -171,7 +179,41 @@ target_link_libraries(uDataPacketCacheService
 
 
 if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
-
+   add_executable(unitTests
+                  testing/options.cpp
+                  testing/utilities.cpp
+                  testing/circularBuffer.cpp
+                  uDataPacketServiceAPI/v1/data_type.proto
+                  uDataPacketServiceAPI/v1/stream_identifier.proto
+                  uDataPacketServiceAPI/v1/packet.proto
+                  uDataPacketCacheServiceAPI/v1/data_type.proto
+                  uDataPacketCacheServiceAPI/v1/stream_identifier.proto
+                  uDataPacketCacheServiceAPI/v1/packet.proto
+                 )
+   set_target_properties(unitTests PROPERTIES
+                         CXX_STANDARD 23
+                         CXX_STANDARD_REQUIRED YES 
+                         CXX_EXTENSIONS NO) 
+   target_link_libraries(unitTests
+                         PRIVATE 
+                            uDataPacketCacheService::libuDataPacketCacheService
+                            spdlog::spdlog_header_only
+                            gRPC::grpc gRPC::grpc++
+                            Threads::Threads TBB::tbb
+                            Catch2::Catch2 Catch2::Catch2WithMain)
+   target_include_directories(unitTests
+                              PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
+   add_test(NAME unitTests
+            COMMAND $<TARGET_FILE:unitTests>)
+   protobuf_generate(TARGET unitTests
+                     LANGUAGE cpp
+                     )
+   protobuf_generate(TARGET unitTests
+                     LANGUAGE grpc
+                     PLUGIN "protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+                     PLUGIN_OPTIONS generate_mock_code=true
+                     GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+                    )
 endif()
 
 ##########################################################################################
