@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cmath>
 #include <cstdint>
 #include <random>
@@ -98,6 +99,12 @@ std::vector<UDataPacketServiceAPI::V1::Packet>
             = Utilities::getEndTime<std::chrono::nanoseconds> (packet);
         nextStartTime = endTime + std::chrono::nanoseconds {dtNanoSeconds};
     }
+    std::sort(packets.begin(), packets.end(),
+              [](const auto &lhs, const auto &rhs)
+              {
+                  return Utilities::getStartTime<std::chrono::nanoseconds> (lhs) <
+                         Utilities::getEndTime<std::chrono::nanoseconds> (rhs);
+              });
     return packets;
 }
 
@@ -164,7 +171,7 @@ TEST_CASE("UDataPacketCacheService::CircularBuffer", "[circularBufferBasic]")
     CircularBufferOptions options;
     options.setMaximumNumberOfPackets(maxPackets);
 
-    auto packets = createPackets(nPackets);
+    auto packets = ::createPackets(nPackets);
 
     SECTION("Simple in order")
     {
@@ -207,11 +214,11 @@ TEST_CASE("UDataPacketCacheService::CircularBuffer", "[circularBufferBasic]")
         auto shuffledPackets = packets;
         std::shuffle(shuffledPackets.begin(), shuffledPackets.end(), generator);
 
-        CircularBuffer cb{options, packets.at(0)};
+        CircularBuffer cb{options, shuffledPackets.at(0)};
         REQUIRE(cb.getIdentifier()
                 == Utilities::toString(packets.at(0).stream_identifier()));
         for (int i = 1; i < static_cast<int> (shuffledPackets.size()); ++i)
-        {   
+        {
             REQUIRE_NOTHROW(cb.addPacket(shuffledPackets.at(i)));
         }
         auto allPackets = cb.getAllPackets();
@@ -227,14 +234,23 @@ TEST_CASE("UDataPacketCacheService::CircularBuffer", "[circularBufferBasic]")
 
     SECTION("Duplicates")
     {
-        CircularBuffer cb{options, packets.at(0)};
+        constexpr size_t iStart{2};
+        constexpr size_t iEnd{7};
+        auto queryStartTime = Utilities::getStartTime<std::chrono::nanoseconds> (packets[iStart]);
+        auto queryEndTime = Utilities::getEndTime<std::chrono::nanoseconds> (packets[iEnd]);
+
+        CircularBuffer cb{options, packets[0]};
         REQUIRE(cb.getIdentifier()
                 == Utilities::toString(packets.at(0).stream_identifier()));
-        for (int i = 1; i < static_cast<int> (packets.size()); ++i)
+        for (int k = 0; k < 2; ++k)
         {
-            REQUIRE_NOTHROW(cb.addPacket(packets.at(i)));
+            for (int i = 0; i < static_cast<int> (packets.size()); ++i)
+            {
+//if (k == 0){std::cout << "send these: " << Utilities::getStartTime<std::chrono::nanoseconds>(packets.at(i)).count()*1.e-9 << std::endl;}
+                REQUIRE_NOTHROW(cb.addPacket(packets.at(i)));
+            }
         }
-        for (const auto &packet : packets){cb.addPacket(packet);}
+        //for (const auto &packet : packets){cb.addPacket(packet);}
         auto allPackets = cb.getAllPackets();
         REQUIRE(allPackets.size() == packets.size());
         REQUIRE(std::is_sorted(allPackets.begin(),
@@ -244,5 +260,23 @@ TEST_CASE("UDataPacketCacheService::CircularBuffer", "[circularBufferBasic]")
                                    return lhs.start_time() < rhs.start_time();
                                }) == true);
         REQUIRE(packetsMatch(packets, allPackets) == true);
+
+        // Query
+        //constexpr size_t iStart{2};
+        //constexpr size_t iEnd{7};
+        //auto startTime = Utilities::getStartTime<std::chrono::nanoseconds> (packets.at(iStart));
+//std::cout << queryStartTime.count() << std::endl;
+        auto startTime = queryStartTime + std::chrono::nanoseconds {1000};
+        //auto endTime = Utilities::getEndTime<std::chrono::nanoseconds> (packets.at(iEnd));
+        auto endTime = queryEndTime - std::chrono::nanoseconds {1000};
+//std::cout << startTime.count() << " | " << endTime.count() << std::endl;
+//getchar();
+        auto queriedPackets = cb.getPackets(std::pair {startTime, endTime});
+        REQUIRE(queriedPackets.size() == iEnd - iStart + 1);
+        for (size_t i = iStart; i <= iEnd; ++i)
+        {
+            REQUIRE(::packetMatches(packets.at(i),
+                                    queriedPackets.at(i - iStart)) == true);
+        }
     }
 }

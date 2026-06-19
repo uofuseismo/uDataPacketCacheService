@@ -1,4 +1,5 @@
-//#include <iostream>
+#include <iomanip>
+#include <iostream>
 #include <algorithm>
 #ifndef NDEBUG
 #include <cassert>
@@ -95,25 +96,24 @@ public:
             return;
         }
 
-        // The packet is not too old so it will go somewhere in the circcular
-        // buffer.  To begin, find the packet whose start time is greater than or
-        // equal to this packet's start time.
         auto it
-            = std::upper_bound(mCircularBuffer.begin(),
-                               mCircularBuffer.end(),
-                               newPacket,
-                               [](const auto &lhs, const auto &rhs)
-             {
-                 return lhs.startTime < rhs.startTime;
-             });
+            = std::ranges::upper_bound(mCircularBuffer,
+                                       newPacket,
+                                       [](const auto &element, const auto &query)
+              {
+                  return element.startTime <= query.startTime;
+              });
         if (it != mCircularBuffer.end())
         {
-            // We have an exact match - ovewrite the old packet
-            auto index = std::distance(mCircularBuffer.begin(), it);
-            const auto startTimeNeighbor = mCircularBuffer[index].startTime;
+            // We have an exact match.  Do nothing because it is either
+            // a backfill (same thing) or it's a timing error which in 
+            // the near-real time context more likely indicates a problem.
+            //auto index = std::distance(mCircularBuffer.begin(), it);
+            const auto startTimeNeighbor = it->startTime; //mCircularBuffer[index].startTime;
             if (startTime == startTimeNeighbor)
             {
-                mCircularBuffer[index] = std::move(newPacket);
+                //std::cout << "Exact match" << std::endl;
+                //mCircularBuffer[index] = std::move(newPacket);
                 mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
                 return; 
             } 
@@ -164,6 +164,23 @@ public:
         const auto endTime = startAndEndTime.second;
         std::vector<UDataPacketCacheServiceAPI::V1::Packet> result;
         if (mCircularBuffer.empty()){return result;}
+        struct CircularBufferPacket queryPacket;
+        queryPacket.startTime = startTime;
+        queryPacket.endTime = endTime;
+        auto it0 = std::ranges::upper_bound(mCircularBuffer, queryPacket,
+                                            [](const auto &element,
+                                               const auto &query)
+                                            {
+                                                return query.startTime >= element.startTime;
+                                            });
+//std::cout << std::setprecision(16) << startTime.count()*1.e-9 << " " << endTime.count()*1.e-9 << std::endl;
+//int i = 0;
+//for (auto &item : mCircularBuffer)
+//{
+ //std::cout << std::setprecision(16) << i << " " << item.startTime.count()*1.e-9 << "," << item.endTime.count()*1.e-9 << std::endl;
+//++i;
+//}
+/*
         auto it0
             = std::upper_bound(mCircularBuffer.begin(),
                                mCircularBuffer.end(), 
@@ -171,8 +188,9 @@ public:
                                [](const std::chrono::nanoseconds queryStartTime,
                                   const auto &rhs)
                                {
-                                   return queryStartTime <= rhs.startTime;
+                                   return queryStartTime >= rhs.startTime;
                                });
+*/
         if (it0 == mCircularBuffer.end()){return result;}
         // Attempt to move back one b/c of how upper_bound works
         if (it0 != mCircularBuffer.begin() && it0->startTime > startTime)
@@ -192,16 +210,24 @@ public:
         auto it1 = mCircularBuffer.end();
         if (endTime < mCircularBuffer.back().startTime)
         {
+            it1 = std::ranges::lower_bound(mCircularBuffer,
+                                           queryPacket,
+                                           [](const auto &element, const auto &query) 
+                                           {
+                                               return query.endTime >= element.startTime;
+                                           });
+            /*
             it1
                 = std::upper_bound(
                     mCircularBuffer.begin(),
                     mCircularBuffer.end(), 
                     endTime,
-                    [](const std::chrono::nanoseconds endTimeQuery,
+                    [](const std::chrono::nanoseconds queryEndTime,
                        const auto &rhs)
                     {
-                        return endTimeQuery < rhs.startTime;
+                        return queryEndTime >= rhs.startTime;
                     });
+            */
         }
         // Just one packet
         if (it0 == it1)
@@ -218,9 +244,14 @@ public:
         auto nPackets = static_cast<int> (std::distance(it0, it1));
         if (nPackets < 1){return result;} // This would be weird by this point
         result.reserve(nPackets);
+//auto i0 = std::ranges::distance(mCircularBuffer.begin(), it0);
+//auto i1 = std::ranges::distance(mCircularBuffer.begin(), it1);
+//std::cout << i0 << " to " << i1 << std::endl;
         for (auto &it = it0; it != it1; std::advance(it, 1))
         {
+            // Maybe bail early
             result.push_back(it->packet);
+            if (endTime <= it->endTime){break;}
         }
 #ifndef NDEBUG
         assert(nPackets == static_cast<int> (result.size()));
