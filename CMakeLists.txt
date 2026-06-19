@@ -112,6 +112,7 @@ target_include_directories(libuDataPacketCacheService
                            PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
                            PUBLIC  $<INSTALL_INTERFACE:>)
 target_link_libraries(libuDataPacketCacheService
+                      PUBLIC TBB::tbb
                       PRIVATE Boost::headers
                               protobuf::libprotobuf
                               spdlog::spdlog_header_only
