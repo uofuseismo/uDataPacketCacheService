@@ -1,5 +1,5 @@
 name: prepare-environment
-description: Prepares the environment
+description: Prepares the test environment
 runs:
   using: "composite"
   steps:

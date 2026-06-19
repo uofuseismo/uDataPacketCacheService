@@ -118,8 +118,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Prepare environment
-        uses: ./.github/actions/prepare-environment
+      - name: Prepare package environment
+        uses: ./.github/actions/prepare-package-environment
 
       - name: Download build directory
         uses: ./.github/actions/download-build-directory
