@@ -208,6 +208,27 @@ TEST_CASE("UDataPacketCacheService::CircularBuffer", "[circularBufferBasic]")
         }
     }
 
+    SECTION("Roll through - standard behavior")
+    {
+        auto doublePackets = ::createPackets(2*nPackets);
+        CircularBufferOptions optionsN;
+        optionsN.setMaximumNumberOfPackets(nPackets);
+        CircularBuffer cb{optionsN, doublePackets.at(0)};
+        REQUIRE(cb.getIdentifier()
+                == Utilities::toString(doublePackets.at(0).stream_identifier()));
+        for (int i = 1; i < static_cast<int> (doublePackets.size()); ++i)
+        {
+            REQUIRE_NOTHROW(cb.addPacket(doublePackets.at(i)));
+        }   
+        auto allPackets = cb.getAllPackets();
+        REQUIRE(static_cast<int> (allPackets.size()) == nPackets);
+        for (int i = nPackets; i < 2*nPackets; ++i)
+        {
+            REQUIRE(::packetMatches(doublePackets.at(i), 
+                                    allPackets.at(i - nPackets)) == true);
+        } 
+    }
+
     SECTION("Out of order")
     {
         std::mt19937 generator(29858);
@@ -232,6 +253,35 @@ TEST_CASE("UDataPacketCacheService::CircularBuffer", "[circularBufferBasic]")
         REQUIRE(packetsMatch(packets, allPackets) == true);
     }
 
+    SECTION("Bad timing")
+    {
+        auto perturbedPackets = packets;
+        for (auto &p : perturbedPackets)
+        {
+            auto startTime
+                = Utilities::getStartTime<std::chrono::nanoseconds> (p);
+            startTime = startTime + std::chrono::nanoseconds {1000};
+            *p.mutable_start_time()
+                = google::protobuf::util::TimeUtil::NanosecondsToTimestamp(
+                  startTime.count());
+        }
+
+        CircularBufferOptions extraSpace;
+        extraSpace.setMaximumNumberOfPackets(nPackets*2);
+        CircularBuffer cb{extraSpace, packets.at(0)};
+        REQUIRE(cb.getIdentifier()
+                == Utilities::toString(packets.at(0).stream_identifier()));
+        for (int i = 1; i < static_cast<int> (packets.size()); ++i)
+        {
+            REQUIRE_NOTHROW(cb.addPacket(packets.at(i)));
+        }
+        for (const auto &packet : perturbedPackets)
+        {
+            REQUIRE_NOTHROW(cb.addPacket(packet));
+        }
+        const auto allPackets = cb.getAllPackets();
+    }
+
     SECTION("Duplicates")
     {
         constexpr size_t iStart{2};
@@ -239,7 +289,9 @@ TEST_CASE("UDataPacketCacheService::CircularBuffer", "[circularBufferBasic]")
         auto queryStartTime = Utilities::getStartTime<std::chrono::nanoseconds> (packets[iStart]);
         auto queryEndTime = Utilities::getEndTime<std::chrono::nanoseconds> (packets[iEnd]);
 
-        CircularBuffer cb{options, packets[0]};
+        CircularBufferOptions extraSpace;
+        extraSpace.setMaximumNumberOfPackets(nPackets*2);
+        CircularBuffer cb{extraSpace, packets.at(0)};
         REQUIRE(cb.getIdentifier()
                 == Utilities::toString(packets.at(0).stream_identifier()));
         for (int k = 0; k < 2; ++k)

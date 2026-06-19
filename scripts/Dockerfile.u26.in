@@ -11,6 +11,7 @@ RUN apt-get update &&\
     apt-get autoclean -y &&\ 
     apt-get -y install bash &&\ 
     apt-get -y install openssl &&\ 
+    apt-get -y install libtbb-dev &&\
     apt-get autoremove -y &&\ 
     apt-get clean &&\ 
     tar -xf ./@PROJECT_NAME@-@PROJECT_VERSION@-Linux.tar.gz &&\ 

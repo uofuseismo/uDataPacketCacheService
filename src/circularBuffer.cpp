@@ -76,10 +76,25 @@ public:
             mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
             return;
         }
+        // There's a wonky case where this can happen.  The latest
+        // packet's timing slipped just a bit.  It's still the most refresh
+        if (startTime > mCircularBuffer.back().startTime)
+        {
+            mCircularBuffer.push_back(std::move(newPacket));
+            mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
+            return;
+        }
 
         // Maybe we can insert at the beginning
         const auto currentEarliestTime
             = (mCircularBuffer.front().startTime);
+        // For the same reason as below - we assume this data is already
+        // acquired and skip it (duplicate or less likely a GPS slip).
+        if (startTime == currentEarliestTime)
+        {
+            mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
+            return;
+        }
         // The buffer is full and we need to prioritize new data so skip this.
         // Still, we can mark it as `updated' to demonstrate this stream is
         // still active.
@@ -89,7 +104,8 @@ public:
             return;
         }
         // Okay, there's space at the beginning so accomodate it.
-        if (endTime <= currentEarliestTime)
+        // N.B. it must also be true that startTime < currentEarliestTime
+        if (endTime <= currentEarliestTime && !mCircularBuffer.full())
         {
             mCircularBuffer.push_front(std::move(newPacket));
             mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
@@ -112,7 +128,6 @@ public:
             const auto startTimeNeighbor = it->startTime; //mCircularBuffer[index].startTime;
             if (startTime == startTimeNeighbor)
             {
-                //std::cout << "Exact match" << std::endl;
                 //mCircularBuffer[index] = std::move(newPacket);
                 mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
                 return; 
@@ -262,7 +277,9 @@ public:
 ///private:
     CircularBufferOptions mOptions;
     // NOLINTNEXTLINE(misc-include-cleaner)
-    boost::circular_buffer_space_optimized<::CircularBufferPacket> mCircularBuffer;
+    //boost::circular_buffer_space_optimized<::CircularBufferPacket> mCircularBuffer;
+    // NOLINTNEXTLINE(misc-include-cleaner)
+    boost::circular_buffer<::CircularBufferPacket> mCircularBuffer;
     std::string mStreamIdentifier;
     //std::chrono::nanoseconds mMaximumDuration;
     std::chrono::microseconds mLastUpdate{0};
