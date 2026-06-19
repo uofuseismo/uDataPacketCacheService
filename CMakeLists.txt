@@ -75,11 +75,15 @@ set(LIBRARY_SRC
     src/circularBuffer.cpp
     src/circularBufferMap.cpp
     src/circularBufferOptions.cpp
+    src/grpcClientOptions.cpp
+    src/grpcServerOptions.cpp
     src/utilities.cpp
     src/version.cpp)
 set(LIBRARY_HEADER_FILES
     include/uDataPacketCacheService/circularBuffer.hpp
     include/uDataPacketCacheService/circularBufferOptions.hpp
+    include/uDataPacketCacheService/grpcClientOptions.hpp
+    include/uDataPacketCacheService/grpcServerOptions.hpp
     include/uDataPacketCacheService/utilities.hpp
     include/uDataPacketCacheService/version.hpp)
 set(IMPORT_PROTO_SRC
