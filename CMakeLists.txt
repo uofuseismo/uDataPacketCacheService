@@ -77,6 +77,7 @@ set(LIBRARY_SRC
     src/circularBufferOptions.cpp
     src/grpcClientOptions.cpp
     src/grpcServerOptions.cpp
+    src/metricsSingleton.cpp
     src/utilities.cpp
     src/version.cpp)
 set(LIBRARY_HEADER_FILES
@@ -84,6 +85,7 @@ set(LIBRARY_HEADER_FILES
     include/uDataPacketCacheService/circularBufferOptions.hpp
     include/uDataPacketCacheService/grpcClientOptions.hpp
     include/uDataPacketCacheService/grpcServerOptions.hpp
+    include/uDataPacketCacheService/metricsSingleton.hpp
     include/uDataPacketCacheService/utilities.hpp
     include/uDataPacketCacheService/version.hpp)
 set(IMPORT_PROTO_SRC

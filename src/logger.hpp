@@ -47,7 +47,7 @@ void setVerbosityForSPDLOG(const int verbosity,
 std::shared_ptr<spdlog::logger>
     initializeHTTP(const int verbosity,
                    const bool exportLogs,
-                   const UFilterPickerPickBroker::OTelOptions::HTTPLog &options)
+                   const auto &options)
 {
     std::shared_ptr<spdlog::logger> logger{nullptr};
     auto consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt> ();
@@ -92,7 +92,7 @@ std::shared_ptr<spdlog::logger>
 std::shared_ptr<spdlog::logger>
     initializeGRPC(const int verbosity,
                    const bool exportLogs,
-                   const UFilterPickerPickBroker::OTelOptions::GRPCLog &options)
+                   const auto &options)
 {
     std::shared_ptr<spdlog::logger> logger{nullptr};
     auto consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt> ();
