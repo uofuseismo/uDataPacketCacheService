@@ -76,7 +76,10 @@ public:
             }
             std::this_thread::sleep_for(std::chrono::milliseconds {15});
             // Now boot the subscribers
-            //mService->stop();
+            if (mService != nullptr)
+            {
+                mService->stop();
+             }
             std::this_thread::sleep_for(std::chrono::milliseconds {15});
         }
     }
@@ -152,6 +155,8 @@ public:
     /// Propagate packets to the backend
     void processPackets()
     {
+        auto maximumLatency
+            = std::chrono::nanoseconds{mOptions.maximumPacketLatency};
         constexpr std::chrono::milliseconds timeOut{10};
         while (mKeepRunning.load())
         {
@@ -213,7 +218,28 @@ public:
                     continue;
                 }
                 // Is the packet too old?
-
+                auto endTime
+                    = Utilities::getEndTime<std::chrono::nanoseconds> (packet);
+                auto now = Utilities::getNow<std::chrono::nanoseconds> ();
+                if (endTime < now - maximumLatency)
+                {
+                    SPDLOG_LOGGER_DEBUG(mLogger,
+                                        "Skipping {} because it is too old",
+                                        name);
+                    continue;
+                }
+                // Add the packet to the circular buffer map
+                try
+                {
+ 
+                }
+                catch (const std::exception &e)
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                       "Failed to add {} to circular buffer map because {}",
+                       name, std::string {e.what()}); 
+                    continue;
+                }
             }
             else
             {
@@ -317,7 +343,7 @@ public:
 //public:
     ::ProgramOptions mOptions;
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
-    //std::unique_ptr<Service> mService{nullptr}; 
+    std::unique_ptr<Service> mService{nullptr}; 
     std::unique_ptr<Subscriber> mDataPacketSubscriber{nullptr};
     mutable std::mutex mStopMutex;
     std::condition_variable mStopCondition;

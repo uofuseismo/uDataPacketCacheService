@@ -33,6 +33,7 @@ struct ProgramOptions
     UDataPacketCacheService::OTelOptions::GRPCLog otelGRPCLogOptions;
     std::string applicationName{APPLICATION_NAME};
     std::chrono::seconds printSummaryInterval{std::chrono::minutes {15}};
+    std::chrono::seconds maximumPacketLatency{std::chrono::minutes{6}};
     int64_t maximumImportQueueSize{4096};
     int verbosity{3};
     bool exportLogs{false};
