@@ -110,7 +110,7 @@ set(SERVICE_PROTO_SRC
     #uDataPacketCacheServiceAPI/v1/service.proto
     uDataPacketCacheServiceAPI/v1/data_request.proto
     #uDataPacketCacheServiceAPI/v1/data_response.proto
-    #uDataPacketCacheServiceAPI/v1/bulk_data_request.proto
+    uDataPacketCacheServiceAPI/v1/bulk_data_request.proto
     #uDataPacketCacheServiceAPI/v1/bulk_data_response.proto
     uDataPacketCacheServiceAPI/v1/time_series.proto
    )
