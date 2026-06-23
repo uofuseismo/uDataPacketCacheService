@@ -1,7 +1,7 @@
 #include <memory>
 #include <spdlog/logger.h>
 #include <uDataPacketCacheServiceAPI/v1/data_request.pb.h>
-#include <uDataPacketCacheServiceAPI/v1/bulk_request.pb.h>
+#include <uDataPacketCacheServiceAPI/v1/bulk_data_request.pb.h>
 #include "uDataPacketCacheService/service.hpp"
 #include "uDataPacketCacheService/serviceOptions.hpp"
 #include "uDataPacketCacheService/circularBufferMap.hpp"
