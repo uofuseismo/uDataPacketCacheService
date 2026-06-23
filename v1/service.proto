@@ -3,24 +3,16 @@ edition = "2023";
 package UDataPacketCacheServiceAPI.V1;
 
 import "uDataPacketCacheServiceAPI/v1/data_request.proto";
-import "uDataPacketCacheServiceAPI/v1/bulk_data_request.proto";
 import "uDataPacketCacheServiceAPI/v1/data_response.proto";
-import "uDataPacketCacheServiceAPI/v1/bulk_data_response.proto";
 
-/*!
+/**
  * The data cache service stores recently acquired data packets and makes
  * them available to subsequent applications in a very low-latency manner.
  * This is most useful for near-real-time applications.  For data queries
  * requesting data older than approximately five minutes it is recommended
  * to use a different service.
  */
-service DataPacketCacheService {
-  /*! 
-   * Fetches a time series corresponding to the given stream.
-   */
+service DataPacketCacheService { 
+  // Fetches the time series corresponding for the specified streams.
   rpc GetTimeSeries(DataRequest) returns(DataResponse) {}; 
-  /*!
-   * Fetches many time series corresponding to the given requests.
-   */
-  rpc GetMultipleTimeSeries(BulkDataRequest) returns(BulkDataResponse) {}:
 }
