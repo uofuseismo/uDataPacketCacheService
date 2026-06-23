@@ -12,6 +12,8 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include "uDataPacketCacheService/serviceOptions.hpp"
+#include "uDataPacketCacheService/subscriberOptions.hpp"
 #include "uDataPacketCacheService/grpcServerOptions.hpp"
 #include "uDataPacketCacheService/grpcClientOptions.hpp"
 #include "otelOptions.hpp"
@@ -23,12 +25,15 @@ namespace
 
 struct ProgramOptions
 {
+    UDataPacketCacheService::ServiceOptions serviceOptions;
+    UDataPacketCacheService::SubscriberOptions dataPacketSubscriberOptions;
     UDataPacketCacheService::OTelOptions::HTTPMetrics otelHTTPMetricsOptions;
     UDataPacketCacheService::OTelOptions::HTTPLog otelHTTPLogOptions;
     UDataPacketCacheService::OTelOptions::GRPCMetrics otelGRPCMetricsOptions;
     UDataPacketCacheService::OTelOptions::GRPCLog otelGRPCLogOptions;
     std::string applicationName{APPLICATION_NAME};
     std::chrono::seconds printSummaryInterval{std::chrono::minutes {15}};
+    int64_t maximumImportQueueSize{4096};
     int verbosity{3};
     bool exportLogs{false};
     bool exportLogsWithHTTP{true};

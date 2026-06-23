@@ -33,11 +33,11 @@ public:
     /// @brief Sets the maximum request queue size.
     /// @param[in] maximumRequestQueueSize   The maximum request queue size.
     /// @throws std::invalid_argument if this is not positive.
-    void setMaximumQueueSize(int maximumRequestQueueSize); 
+    void setMaximumRequestQueueSize(int maximumRequestQueueSize); 
     /// @result The maximum request queue size.  After this point the service
     ///         returns UNAVAILABLE gRPC errors.
     /// @note By default this is 32.
-    [[nodiscard]] int getMaximumQueueSize() const noexcept;
+    [[nodiscard]] int getMaximumRequestQueueSize() const noexcept;
 
     /// @brief Sets the maximum request message size (in bytes).
     /// @param[in] maximumMessageSize   The maximum message size in bytes.

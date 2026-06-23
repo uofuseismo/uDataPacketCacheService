@@ -1,5 +1,6 @@
 #ifndef UDATA_PACKET_CACHE_SERVICE_SERVICE_HPP
 #define UDATA_PACKET_CACHE_SERVICE_SERVICE_HPP
+#include <spdlog/logger.h>
 #include <future>
 #include <memory>
 namespace UDataPacketCacheService
@@ -18,7 +19,8 @@ class Service
 public:
     /// @brief Creates the service.
     Service(std::shared_ptr<CircularBufferMap> circularBufferMap,
-            const ServiceOptions &options);  
+            const ServiceOptions &options,
+            std::shared_ptr<spdlog::logger> logger);  
 
     /// @brief Runs the service on a separate thread.
     std::future<void> start();

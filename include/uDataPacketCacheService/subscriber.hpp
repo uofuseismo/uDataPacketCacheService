@@ -16,7 +16,9 @@ namespace UDataPacketCacheService
  class SubscriberOptions;
 }
 
-/// @class Subscriber
+namespace UDataPacketCacheService
+{
+/// @class Subscriber "subscriber.hpp"
 /// @brief Defines the gRPC data packet client.
 /// @copyright Ben Baker (University of Utah) distributed under the
 ///            MIT NO AI license.
@@ -25,7 +27,7 @@ class Subscriber
 public:
     /// @brief Constructor
     Subscriber(const SubscriberOptions &options,
-               const std::function<void (UDataPacketServiceAPI::V1::Packet &&paket)> &callback,
+               const std::function<void (UDataPacketServiceAPI::V1::Packet &&)> &callback,
                std::shared_ptr<spdlog::logger> logger);
 
     /// @result True indicates the subscriber is initialized.
@@ -33,6 +35,9 @@ public:
 
     /// @brief Starts the acquisition.
     [[nodiscard]] std::future<void> start();
+
+    /// @brief Stops the acquisition.
+    void stop();
 
     /// @brief Destructor
     ~Subscriber();
@@ -46,3 +51,4 @@ private:
     std::unique_ptr<SubscriberImpl> pImpl;
 };
 }
+#endif

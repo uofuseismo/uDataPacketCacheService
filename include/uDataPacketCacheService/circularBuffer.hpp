@@ -10,6 +10,7 @@ namespace UDataPacketServiceAPI::V1
 namespace UDataPacketCacheServiceAPI::V1
 {
  class Packet;
+ class StreamIdentifier;
 }
 namespace UDataPacketCacheService
 {

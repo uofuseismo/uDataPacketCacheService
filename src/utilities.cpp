@@ -175,19 +175,19 @@ UDataPacketCacheService::Utilities::getEndTime<std::chrono::nanoseconds>(
 template<>
 std::chrono::microseconds UDataPacketCacheService::Utilities::getNow()
 {
-     auto now
-        = std::chrono::duration_cast<std::chrono::microseconds>
-          ((std::chrono::high_resolution_clock::now()).time_since_epoch());
-     return now;
+    auto now
+       = std::chrono::duration_cast<std::chrono::microseconds>
+         ((std::chrono::high_resolution_clock::now()).time_since_epoch());
+    return now;
 }   
 
 template<>
 std::chrono::nanoseconds UDataPacketCacheService::Utilities::getNow()
 {
-     auto now 
-        = std::chrono::duration_cast<std::chrono::microseconds>
-          ((std::chrono::high_resolution_clock::now()).time_since_epoch());
-     return now;
+    auto now 
+       = std::chrono::duration_cast<std::chrono::microseconds>
+         ((std::chrono::high_resolution_clock::now()).time_since_epoch());
+    return now;
 }   
 
 /// @brief Converts the input packet to a string name.

@@ -74,7 +74,7 @@ bool ServiceOptions::hasGRPCOptions() const noexcept
 }
 
 /// Maximum request size
-void ServiceOptions::setMaximumQueueSize(const int maximumQueueSize)
+void ServiceOptions::setMaximumRequestQueueSize(const int maximumQueueSize)
 {
     if (maximumQueueSize <= 0)
     {
@@ -83,7 +83,7 @@ void ServiceOptions::setMaximumQueueSize(const int maximumQueueSize)
     pImpl->mMaximumRequestQueueSize = maximumQueueSize;
 }
 
-int ServiceOptions::getMaximumQueueSize() const noexcept
+int ServiceOptions::getMaximumRequestQueueSize() const noexcept
 {
     return pImpl->mMaximumRequestQueueSize;
 }

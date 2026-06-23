@@ -2,6 +2,7 @@
 #define UDATA_PACKET_CACHE_SERVICE_CIRCULAR_BUFFER_MAP_HPP
 #include <vector>
 #include <memory>
+#include <spdlog/logger.h>
 
 namespace UDataPacketCacheServiceAPI::V1
 {
@@ -25,6 +26,8 @@ class CircularBufferMap
 {
 public:
 CircularBufferMap();
+    CircularBufferMap(std::shared_ptr<spdlog::logger> logger);
+    
     /// @brief Adds a packet to the map.
     void addPacket(UDataPacketServiceAPI::V1::Packet &&packet);
 
@@ -41,7 +44,7 @@ CircularBufferMap();
     /// @param[in] startAndEndTime  The time range to query.
     /// @result The corresponding packets in the given time range.
     [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::Packet>
-         getPackets(const UDataPacketServiceAPI::V1::StreamIdentifier &identifier,
+         getPackets(const UDataPacketCacheServiceAPI::V1::StreamIdentifier &identifier,
                     const std::pair<std::chrono::nanoseconds,
                                     std::chrono::nanoseconds> &startAndEndTime) const;
     /// @brief Destructor.

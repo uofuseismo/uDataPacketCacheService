@@ -2,8 +2,10 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <future>
 #include <map>
 #include <memory>
@@ -16,8 +18,12 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <oneapi/tbb/concurrent_queue.h>
+#include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include "uDataPacketCacheService/service.hpp"
+#include "uDataPacketCacheService/subscriber.hpp"
 #include "uDataPacketCacheService/metricsSingleton.hpp"
+#include "uDataPacketCacheService/utilities.hpp"
 #include "programOptions.hpp"
 #include "logger.hpp"
 #include "metrics.hpp"
@@ -40,6 +46,14 @@ public:
         mOptions(std::move(options)),
         mLogger(std::move(logger))
     {
+        mMaximumImportQueueSize = mOptions.maximumImportQueueSize;
+        mImportQueue.set_capacity(mMaximumImportQueueSize);
+
+        mDataPacketSubscriber
+            = std::make_unique<Subscriber> (
+                mOptions.dataPacketSubscriberOptions,
+                mAddPacketCallback,
+                mLogger);
     }
 
     /// @brief Destructor
@@ -53,7 +67,158 @@ public:
     {
         if (mIsRunning)
         {
+            mKeepRunning.store(false);
             mIsRunning = false;
+            // Stop the import first
+            if (mDataPacketSubscriber != nullptr)
+            {
+                mDataPacketSubscriber->stop();
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds {15});
+            // Now boot the subscribers
+            //mService->stop();
+            std::this_thread::sleep_for(std::chrono::milliseconds {15});
+        }
+    }
+
+    /// Allows import thread to add packets
+    void addPacket(UDataPacketServiceAPI::V1::Packet &&packet)
+    {
+        if (!packet.has_stream_identifier())
+        {
+            SPDLOG_LOGGER_WARN(mLogger,
+                               "Packet does not have identifier - skipping");
+            return;
+        }
+        if (!packet.has_sampling_rate())
+        {
+            SPDLOG_LOGGER_WARN(mLogger,
+                               "Packet does not have sampling rate - skipping");
+            return;
+        }
+        if (packet.sampling_rate() <= 0)
+        {
+            SPDLOG_LOGGER_WARN(mLogger,
+                               "Sampling rate is invalid - skipping");
+            return;
+        }
+        if (!packet.has_data_type())
+        {
+            SPDLOG_LOGGER_WARN(mLogger,
+                               "Packet does not have a data type - skipping");
+            return;
+        }
+        if (!packet.has_number_of_samples())
+        {
+            SPDLOG_LOGGER_WARN(mLogger,
+                         "Packet does not have a number of samples - skipping");
+            return;
+        }
+        if (packet.number_of_samples() < 1)
+        {
+            SPDLOG_LOGGER_WARN(mLogger,
+                               "Packet does is empty - skipping");
+            return;
+        }
+        if (!packet.has_data())
+        {
+            SPDLOG_LOGGER_WARN(mLogger,
+                               "Packet does not data - skipping");
+            return;
+        }
+        // Make sure there's space in the queue
+        if (static_cast<size_t> (mImportQueue.size()) >= 
+            mMaximumImportQueueSize)
+        {
+            SPDLOG_LOGGER_WARN(mLogger, "Queue full - popping packets");
+            while (static_cast<size_t> (mImportQueue.size()) >=
+                   mMaximumImportQueueSize)
+            {
+                UDataPacketServiceAPI::V1::Packet work;
+                if (!mImportQueue.try_pop(work))
+                {
+                    SPDLOG_LOGGER_WARN(mLogger, "Failed to pop front of queue");
+                    break;
+                }
+            }   
+        }
+        // Add it
+        if (!mImportQueue.try_push(std::move(packet)))
+        {
+            SPDLOG_LOGGER_WARN(mLogger, "Failed to enqueue packet");
+        }
+    }
+
+    /// Propagate packets to the backend
+    void processPackets()
+    {
+        constexpr std::chrono::milliseconds timeOut{10};
+        while (mKeepRunning.load())
+        {
+            UDataPacketServiceAPI::V1::Packet packet;
+            auto gotPacket = mImportQueue.try_pop(packet);
+            if (gotPacket)
+            {
+                // Check the packet
+                if (!packet.has_stream_identifier())
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                       "Packet does not have identifier - skipping");
+                    continue;
+                }
+                std::string name;
+                try
+                {
+                    name = Utilities::toString(packet.stream_identifier());
+                }
+                catch (const std::exception &e)
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "Could not determine input packet name because {}",
+                        std::string {e.what()});
+                    continue;
+                }
+                if (!packet.has_sampling_rate())
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "Packet for {} does not have sampling rate - skipping",
+                        name);
+                    continue;
+                }
+                if (!packet.has_start_time())
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "Packet for {} does not have start time - skipping",
+                        name);
+                    continue;
+                }
+                if (packet.sampling_rate() <= 0)
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "Sampling rate is invalid for {} - skipping", name);
+                    continue;
+                }
+                if (!packet.has_data_type())
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "Packet for {} does not have a data type - skipping",
+                         name);
+                    continue;
+                }
+                if (!packet.has_number_of_samples())
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                       "Packet for {} does not have a samples count - skipping",
+                       name);
+                    continue;
+                }
+                // Is the packet too old?
+
+            }
+            else
+            {
+                std::this_thread::sleep_for(timeOut);
+            }
         }
     }
 
@@ -153,17 +318,29 @@ public:
     ::ProgramOptions mOptions;
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
     //std::unique_ptr<Service> mService{nullptr}; 
-    //std::unique_ptr<Subscriber> mDataPacketClient{nullptr};
+    std::unique_ptr<Subscriber> mDataPacketSubscriber{nullptr};
     mutable std::mutex mStopMutex;
     std::condition_variable mStopCondition;
+    tbb::concurrent_bounded_queue
+    <
+        UDataPacketServiceAPI::V1::Packet
+    > mImportQueue;
+    std::function<void(UDataPacketServiceAPI::V1::Packet &&)>
+        mAddPacketCallback
+    {   
+        std::bind(&Process::addPacket, this,
+                  std::placeholders::_1)
+    };  
     std::chrono::seconds mLastReport
     {
         std::chrono::duration_cast<std::chrono::seconds>
         ((std::chrono::high_resolution_clock::now()).time_since_epoch())
     };
     std::map<std::string, std::future<void>> mFuturesMap;
+    int64_t mMaximumImportQueueSize{4096};
     bool mStopRequested{false};
     bool mIsRunning{false};
+    std::atomic<bool> mKeepRunning{true};
 };
 
 int main(int argc, char *argv[])

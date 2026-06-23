@@ -78,6 +78,7 @@ set(LIBRARY_SRC
     src/grpcClientOptions.cpp
     src/grpcServerOptions.cpp
     src/metricsSingleton.cpp
+    src/service.cpp
     src/serviceOptions.cpp
     src/subscriber.cpp
     src/subscriberOptions.cpp
@@ -89,6 +90,7 @@ set(LIBRARY_HEADER_FILES
     include/uDataPacketCacheService/grpcClientOptions.hpp
     include/uDataPacketCacheService/grpcServerOptions.hpp
     include/uDataPacketCacheService/metricsSingleton.hpp
+    include/uDataPacketCacheService/service.hpp
     include/uDataPacketCacheService/serviceOptions.hpp
     include/uDataPacketCacheService/subscriber.hpp
     include/uDataPacketCacheService/subscriberOptions.hpp
@@ -105,6 +107,12 @@ set(SERVICE_PROTO_SRC
     uDataPacketCacheServiceAPI/v1/data_type.proto
     uDataPacketCacheServiceAPI/v1/stream_identifier.proto
     uDataPacketCacheServiceAPI/v1/packet.proto
+    #uDataPacketCacheServiceAPI/v1/service.proto
+    uDataPacketCacheServiceAPI/v1/data_request.proto
+    #uDataPacketCacheServiceAPI/v1/data_response.proto
+    #uDataPacketCacheServiceAPI/v1/bulk_data_request.proto
+    #uDataPacketCacheServiceAPI/v1/bulk_data_response.proto
+    uDataPacketCacheServiceAPI/v1/time_series.proto
    )
 
 if (BUILD_SHARED_LIBS)

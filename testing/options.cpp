@@ -225,7 +225,7 @@ TEST_CASE("UDataPacketCacheService", "[ServiceOptions]")
     {
         const ServiceOptions options;
         REQUIRE_FALSE(options.hasGRPCOptions());
-        REQUIRE(options.getMaximumQueueSize() == 32);
+        REQUIRE(options.getMaximumRequestQueueSize() == 32);
         REQUIRE(options.getMaximumRequestMessageSizeInBytes() == 1024);
     }
 
@@ -240,16 +240,16 @@ TEST_CASE("UDataPacketCacheService", "[ServiceOptions]")
         grpcOptions.setPort(port);
       
         ServiceOptions options;
-        REQUIRE_THROWS(options.setMaximumQueueSize(0));
+        REQUIRE_THROWS(options.setMaximumRequestQueueSize(0));
         REQUIRE_THROWS(options.setMaximumRequestMessageSizeInBytes(0));
         options.setGRPCOptions(grpcOptions);
-        options.setMaximumQueueSize(maxQueueSize);
+        options.setMaximumRequestQueueSize(maxQueueSize);
         options.setMaximumRequestMessageSizeInBytes(maxMessageSize);
 
         const ServiceOptions copy{options};
         REQUIRE(copy.getGRPCOptions().getHost() == host);
         REQUIRE(copy.getGRPCOptions().getPort() == port);
-        REQUIRE(copy.getMaximumQueueSize() == maxQueueSize);
+        REQUIRE(copy.getMaximumRequestQueueSize() == maxQueueSize);
         REQUIRE(copy.getMaximumRequestMessageSizeInBytes() == maxMessageSize);
     }
 
