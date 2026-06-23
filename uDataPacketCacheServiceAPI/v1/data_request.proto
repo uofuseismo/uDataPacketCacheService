@@ -4,12 +4,20 @@ import "google/protobuf/timestamp.proto";
 package UDataPacketCacheServiceAPI.V1;
 import "uDataPacketCacheServiceAPI/v1/stream_identifier.proto";
 
-/*!
- * Requests time series data from a specific stream.
+/**
+ * Requests time series data corresponding to data streams.
  */
 message DataRequest {
-   string identifier = 1 [default = ""];      /// A request identifier.
-   StreamIdentifier stream_identifier = 2;    /// The desired stream.
-   google.protobuf.Timestamp start_time = 3;  /// The start time of the request.
-   google.protobuf.Timestamp end_time = 4;    /// The end time of the request.
+   message StreamRequest {
+      // The desired stream. 
+      StreamIdentifier stream_identifier = 1;
+      // The desired start time.  Note, the response may have data before this time.
+      google.protobuf.Timestamp start_time = 2;
+      // The desired end time.  Note, the response may have data beyond this time.
+      google.protobuf.Timestamp end_time = 3;
+   }
+   // A request identifier.
+   string identifier = 1 [default = ""];
+   // The requests for each stream.
+   repeated StreamRequest stream_requests = 2;
 }

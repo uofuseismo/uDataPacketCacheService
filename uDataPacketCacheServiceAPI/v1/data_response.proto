@@ -7,6 +7,8 @@ import "uDataPacketCacheServiceAPI/v1/time_series.proto";
  * The time series corresponding to a data request.
  */
 message DataResponse {
-   string identifier = 1 [default = ""]; /// The identifier corresponding to the input request.
-   repeated TimeSeries time_series;      /// The series corresponding to the data request.
+   // The identifier corresponding to the input request.
+   string identifier = 1 [default = ""];
+   // The individual time series corresponding to each specified stream.
+   repeated TimeSeries time_series = 2;
 }
