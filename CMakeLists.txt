@@ -78,6 +78,9 @@ set(LIBRARY_SRC
     src/grpcClientOptions.cpp
     src/grpcServerOptions.cpp
     src/metricsSingleton.cpp
+    src/serviceOptions.cpp
+    src/subscriber.cpp
+    src/subscriberOptions.cpp
     src/utilities.cpp
     src/version.cpp)
 set(LIBRARY_HEADER_FILES
@@ -86,6 +89,9 @@ set(LIBRARY_HEADER_FILES
     include/uDataPacketCacheService/grpcClientOptions.hpp
     include/uDataPacketCacheService/grpcServerOptions.hpp
     include/uDataPacketCacheService/metricsSingleton.hpp
+    include/uDataPacketCacheService/serviceOptions.hpp
+    include/uDataPacketCacheService/subscriber.hpp
+    include/uDataPacketCacheService/subscriberOptions.hpp
     include/uDataPacketCacheService/utilities.hpp
     include/uDataPacketCacheService/version.hpp)
 set(IMPORT_PROTO_SRC
