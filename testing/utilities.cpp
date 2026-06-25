@@ -268,6 +268,40 @@ TEST_CASE("UDataPacketCacheService::Utilities", "[convertIdentifier]")
     }
 }
 
+TEST_CASE("UDataPacketCacheService::Utilities", "[isValid]")
+{
+    const std::vector<int> data{-1, -0, 1, 2, 3, 4, 5, 6, 7, 8}; 
+    const std::chrono::seconds startTimeS{1774627730};
+    const auto startTime
+        = google::protobuf::util::TimeUtil::SecondsToTimestamp(
+            startTimeS.count());
+    constexpr double samplingRate{100};
+    const int nSamples = static_cast<int> (data.size());
+
+    UDataPacketServiceAPI::V1::StreamIdentifier identifier;
+    identifier.set_network("UU");
+    identifier.set_station("EKU");
+    identifier.set_channel("EHZ");
+    identifier.set_location_code("01");
+
+    UDataPacketServiceAPI::V1::Packet packet;
+    std::string reason;
+
+    REQUIRE(Utilities::isValid(packet, reason) == false);
+    *packet.mutable_stream_identifier() = identifier;
+    REQUIRE(Utilities::isValid(packet, reason) == false);
+    packet.set_sampling_rate(samplingRate);
+    REQUIRE(Utilities::isValid(packet, reason) == false);
+    *packet.mutable_start_time() = startTime;
+    REQUIRE(Utilities::isValid(packet, reason) == false);
+    packet.set_data_type(::toDataType<int>());
+    REQUIRE(Utilities::isValid(packet, reason) == false);
+    packet.set_number_of_samples(nSamples);
+    REQUIRE(Utilities::isValid(packet, reason) == false);
+    packet.set_data(::pack(data));
+    REQUIRE(Utilities::isValid(packet, reason) == true);
+}
+
 TEST_CASE("UDataPacketCacheService::Utiliites", "[startEndTime]")
 {
     const std::vector<int> data{-1, -0, 1, 2, 3, 4, 5, 6, 7, 8};

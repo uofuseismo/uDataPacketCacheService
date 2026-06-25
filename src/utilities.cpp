@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -475,3 +476,45 @@ UDataPacketCacheServiceAPI::V1::Packet
     return convert(std::move(copy));
 }
 
+bool UDataPacketCacheService::Utilities::isValid(
+    const UDataPacketServiceAPI::V1::Packet &packet, std::string &reason)
+{
+    // Check the packet
+    if (!packet.has_stream_identifier())
+    {
+        reason = "Packet does not have identifier"; 
+        return false;
+    }
+    std::string name;
+    try
+    {
+        name = toString(packet.stream_identifier());
+    }
+    catch (const std::exception &e) 
+    {
+        reason = "Could not determine input packet name because "
+               + std::string {e.what()};
+        return false;
+    }
+    if (!packet.has_sampling_rate())
+    {
+        reason = name + " does not have a sampling rate";
+        return false;
+    }
+    if (packet.sampling_rate() <= 0)
+    {
+        reason = name + " has invalid sampling rate";
+        return false;
+    }
+    if (!packet.has_data_type())
+    {
+        reason = name + " does not have a data type";
+        return false;
+    }
+    if (packet.number_of_samples() < 1 || !packet.has_data())
+    {
+        reason = name + " has no data";
+        return false;
+    }
+    return true; 
+}

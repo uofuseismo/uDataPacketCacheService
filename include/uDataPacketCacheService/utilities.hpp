@@ -41,5 +41,8 @@ template<typename T> T getNow();
 [[nodiscard]] std::string toString(const UDataPacketCacheServiceAPI::V1::StreamIdentifier &identifier);
 /// @brief Inverse function of toString.
 template<typename T> T fromString(const std::string &identifier);
+/// @brief Utility to check if an import packet is valid.
+[[nodiscard]] bool isValid(const UDataPacketServiceAPI::V1::Packet &packet,
+                           std::string &reason);
 }
 #endif
