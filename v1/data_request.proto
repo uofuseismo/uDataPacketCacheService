@@ -1,6 +1,6 @@
 edition = "2023";
 package UDataPacketCacheServiceAPI.V1;
-import "UDataPacketCacheServcieAPI/v1/stream_request.proto";
+import "UDataPacketCacheServiceAPI/v1/stream_request.proto";
 
 /**
  * Requests time series data corresponding to data streams.
