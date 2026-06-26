@@ -19,6 +19,7 @@
 #include <uDataPacketCacheServiceAPI/v1/data_type.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/data_request.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/stream_identifier.pb.h>
+#include <uDataPacketCacheServcieAPI/v1/stream_request.pb.h>
 #include "uDataPacketCacheService/utilities.hpp"
 
 /*
