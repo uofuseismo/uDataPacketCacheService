@@ -1,0 +1,15 @@
+edition = "2023";
+import "google/protobuf/timestamp.proto";
+
+package UDataPacketCacheServiceAPI.V1;
+
+import "uDataPacketCacheServiceAPI/v1/stream_identifier.proto";
+
+message StreamRequest {
+  // The desired stream. 
+  StreamIdentifier stream_identifier = 1;
+  // The desired start time.  Note, the response may have data before this time.
+  google.protobuf.Timestamp start_time = 2;
+  // The desired end time.  Note, the response may have data beyond this time.
+  google.protobuf.Timestamp end_time = 3;
+}
