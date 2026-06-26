@@ -20,6 +20,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
+#include "uDataPacketCacheService/streamDequeMap.hpp"
 #include "uDataPacketCacheService/service.hpp"
 #include "uDataPacketCacheService/subscriber.hpp"
 #include "uDataPacketCacheService/metricsSingleton.hpp"
@@ -79,7 +80,7 @@ public:
             if (mService != nullptr)
             {
                 mService->stop();
-             }
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds {15});
         }
     }
@@ -87,48 +88,6 @@ public:
     /// Allows import thread to add packets
     void addPacket(UDataPacketServiceAPI::V1::Packet &&packet)
     {
-        if (!packet.has_stream_identifier())
-        {
-            SPDLOG_LOGGER_WARN(mLogger,
-                               "Packet does not have identifier - skipping");
-            return;
-        }
-        if (!packet.has_sampling_rate())
-        {
-            SPDLOG_LOGGER_WARN(mLogger,
-                               "Packet does not have sampling rate - skipping");
-            return;
-        }
-        if (packet.sampling_rate() <= 0)
-        {
-            SPDLOG_LOGGER_WARN(mLogger,
-                               "Sampling rate is invalid - skipping");
-            return;
-        }
-        if (!packet.has_data_type())
-        {
-            SPDLOG_LOGGER_WARN(mLogger,
-                               "Packet does not have a data type - skipping");
-            return;
-        }
-        if (!packet.has_number_of_samples())
-        {
-            SPDLOG_LOGGER_WARN(mLogger,
-                         "Packet does not have a number of samples - skipping");
-            return;
-        }
-        if (packet.number_of_samples() < 1)
-        {
-            SPDLOG_LOGGER_WARN(mLogger,
-                               "Packet does is empty - skipping");
-            return;
-        }
-        if (!packet.has_data())
-        {
-            SPDLOG_LOGGER_WARN(mLogger,
-                               "Packet does not data - skipping");
-            return;
-        }
         // Make sure there's space in the queue
         if (static_cast<size_t> (mImportQueue.size()) >= 
             mMaximumImportQueueSize)
@@ -155,8 +114,14 @@ public:
     /// Propagate packets to the backend
     void processPackets()
     {
+        auto &metrics
+            = UDataPacketCacheService::MetricsSingleton::getInstance();
         auto maximumLatency
             = std::chrono::nanoseconds{mOptions.maximumPacketLatency};
+        const bool checkLatency = maximumLatency.count() > 0 ? true : false;
+        auto maximumFutureTime
+            = std::chrono::nanoseconds{mOptions.maximumPacketFutureTime};
+        const bool checkFuture = maximumFutureTime.count() >= 0 ? true : false;
         constexpr std::chrono::milliseconds timeOut{10};
         while (mKeepRunning.load())
         {
@@ -164,80 +129,59 @@ public:
             auto gotPacket = mImportQueue.try_pop(packet);
             if (gotPacket)
             {
-                // Check the packet
-                if (!packet.has_stream_identifier())
+                // Check packet
+                metrics.incrementPacketsReceivedCounter();
+                std::string reason;
+                if (!Utilities::isValid(packet, reason))
                 {
-                    SPDLOG_LOGGER_WARN(mLogger,
-                       "Packet does not have identifier - skipping");
-                    continue;
+                    metrics.incrementInvalidPacketsReceivedCounter();
+                    SPDLOG_LOGGER_DEBUG(mLogger, "Skipping packet because {}",
+                                        reason);
                 }
-                std::string name;
-                try
-                {
-                    name = Utilities::toString(packet.stream_identifier());
-                }
-                catch (const std::exception &e)
-                {
-                    SPDLOG_LOGGER_WARN(mLogger,
-                        "Could not determine input packet name because {}",
-                        std::string {e.what()});
-                    continue;
-                }
-                if (!packet.has_sampling_rate())
-                {
-                    SPDLOG_LOGGER_WARN(mLogger,
-                        "Packet for {} does not have sampling rate - skipping",
-                        name);
-                    continue;
-                }
-                if (!packet.has_start_time())
-                {
-                    SPDLOG_LOGGER_WARN(mLogger,
-                        "Packet for {} does not have start time - skipping",
-                        name);
-                    continue;
-                }
-                if (packet.sampling_rate() <= 0)
-                {
-                    SPDLOG_LOGGER_WARN(mLogger,
-                        "Sampling rate is invalid for {} - skipping", name);
-                    continue;
-                }
-                if (!packet.has_data_type())
-                {
-                    SPDLOG_LOGGER_WARN(mLogger,
-                        "Packet for {} does not have a data type - skipping",
-                         name);
-                    continue;
-                }
-                if (!packet.has_number_of_samples())
-                {
-                    SPDLOG_LOGGER_WARN(mLogger,
-                       "Packet for {} does not have a samples count - skipping",
-                       name);
-                    continue;
-                }
+
                 // Is the packet too old?
-                auto endTime
-                    = Utilities::getEndTime<std::chrono::nanoseconds> (packet);
-                auto now = Utilities::getNow<std::chrono::nanoseconds> ();
-                if (endTime < now - maximumLatency)
+                if (checkLatency || checkFuture)
                 {
-                    SPDLOG_LOGGER_DEBUG(mLogger,
-                                        "Skipping {} because it is too old",
-                                        name);
-                    continue;
+                    auto now = Utilities::getNow<std::chrono::nanoseconds> (); 
+                    if (checkLatency)
+                    {
+                        metrics.incrementInvalidPacketsReceivedCounter();
+                        auto startTime
+                            = Utilities::getStartTime<std::chrono::nanoseconds>
+                              (packet);
+                        if (startTime < now - maximumLatency)
+                        {
+                            SPDLOG_LOGGER_DEBUG(mLogger,
+                                "Skipping {} because it is has expired data",
+                                 name);
+                            continue;
+                        }
+                    }
+                    if (checkLatency)
+                    {
+                        metrics.incrementInvalidPacketsReceivedCounter();
+                        auto endTime
+                            = Utilities::getStartTime<std::chrono::nanoseconds>
+                              (packet);
+                        if (endTime > now + maximumFutureTime)
+                        {
+                            SPDLOG_LOGGER_DEBUG(mLogger,
+                                "Skipping {} because it has data from future",
+                                 name);
+                            continue;
+                        }
+                    }
                 }
-                // Add the packet to the circular buffer map
+                // Add the packet to the collection of stream deques
                 try
                 {
- 
+                    //mStreamDequeMap->addPacket(std::move(packet)); 
                 }
                 catch (const std::exception &e)
                 {
                     SPDLOG_LOGGER_WARN(mLogger,
-                       "Failed to add {} to circular buffer map because {}",
-                       name, std::string {e.what()}); 
+                       "Failed to add packet to stream deque map because {}",
+                       std::string {e.what()}); 
                     continue;
                 }
             }
@@ -343,14 +287,19 @@ public:
 //public:
     ::ProgramOptions mOptions;
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
-    std::unique_ptr<Service> mService{nullptr}; 
+    std::unique_ptr<Service> mService{nullptr};
     std::unique_ptr<Subscriber> mDataPacketSubscriber{nullptr};
+    std::shared_ptr<StreamDequeMap> mStreamDequeMap{nullptr};
     mutable std::mutex mStopMutex;
     std::condition_variable mStopCondition;
     tbb::concurrent_bounded_queue
     <
         UDataPacketServiceAPI::V1::Packet
     > mImportQueue;
+    UDataPacketCacheService::MetricsSingleton &mMetrics
+    {
+        UDataPacketCacheService::MetricsSingleton::getInstance()
+    };
     std::function<void(UDataPacketServiceAPI::V1::Packet &&)>
         mAddPacketCallback
     {   

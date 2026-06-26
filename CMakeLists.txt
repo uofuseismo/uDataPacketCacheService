@@ -72,32 +72,36 @@ configure_file(${CMAKE_SOURCE_DIR}/src/version.hpp.in
                ${CMAKE_SOURCE_DIR}/include/uDataPacketCacheService/version.hpp)
 
 set(LIBRARY_SRC
-    src/circularBuffer.cpp
-    src/circularBufferMap.cpp
-    src/circularBufferMapOptions.cpp
-    src/circularBufferOptions.cpp
+    #src/circularBuffer.cpp
+    #src/circularBufferMap.cpp
+    #src/circularBufferMapOptions.cpp
+    #src/circularBufferOptions.cpp
     src/grpcClientOptions.cpp
     src/grpcServerOptions.cpp
     src/metricsSingleton.cpp
     src/service.cpp
     src/serviceOptions.cpp
     src/streamDeque.cpp
+    src/streamDequeMap.cpp
+    src/streamDequeMapOptions.cpp
     src/streamDequeOptions.cpp
     src/subscriber.cpp
     src/subscriberOptions.cpp
     src/utilities.cpp
     src/version.cpp)
 set(LIBRARY_HEADER_FILES
-    include/uDataPacketCacheService/circularBuffer.hpp
-    include/uDataPacketCacheService/circularBufferMap.hpp
-    include/uDataPacketCacheService/circularBufferMapOptions.hpp
-    include/uDataPacketCacheService/circularBufferOptions.hpp
+    #include/uDataPacketCacheService/circularBuffer.hpp
+    #include/uDataPacketCacheService/circularBufferMap.hpp
+    #include/uDataPacketCacheService/circularBufferMapOptions.hpp
+    #include/uDataPacketCacheService/circularBufferOptions.hpp
     include/uDataPacketCacheService/grpcClientOptions.hpp
     include/uDataPacketCacheService/grpcServerOptions.hpp
     include/uDataPacketCacheService/metricsSingleton.hpp
     include/uDataPacketCacheService/service.hpp
     include/uDataPacketCacheService/serviceOptions.hpp
     include/uDataPacketCacheService/streamDeque.hpp
+    include/uDataPacketCacheService/streamDequeMap.hpp
+    include/uDataPacketCacheService/streamDequeMapOptions.hpp
     include/uDataPacketCacheService/streamDequeOptions.hpp
     include/uDataPacketCacheService/subscriber.hpp
     include/uDataPacketCacheService/subscriberOptions.hpp

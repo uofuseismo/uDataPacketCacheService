@@ -34,6 +34,7 @@ struct ProgramOptions
     std::string applicationName{APPLICATION_NAME};
     std::chrono::seconds printSummaryInterval{std::chrono::minutes {15}};
     std::chrono::seconds maximumPacketLatency{std::chrono::minutes{6}};
+    std::chrono::milliseconds maximumPacketFutureTime{std::chrono::milliseconds {0}};
     int64_t maximumImportQueueSize{4096};
     int verbosity{3};
     bool exportLogs{false};
@@ -320,6 +321,168 @@ std::string getOTelCollectorURL(boost::property_tree::ptree &propertyTree,
                                  summaryIntervalInMinutes);
     options.printSummaryInterval
         = std::chrono::minutes {summaryIntervalInMinutes};
+
+    // GRPC data packet client options
+    auto grpcDataPacketClientOptions
+        = ::getGRPCClientOptions(propertyTree,
+                                 "DataPacketSubscriber");
+    options.dataPacketSubscriberOptions.setGRPCOptions(
+        grpcDataPacketClientOptions);
+    options.dataPacketSubscriberOptions.setIdentifier(options.applicationName);
+
+    options.maximumImportQueueSize
+        = propertyTree.get<int> ("DataPacketSubscriber.maximumImportQueueSize",
+                                 options.maximumImportQueueSize);
+    if (options.maximumImportQueueSize < 1)
+    {   
+        throw std::invalid_argument(
+           "DataPacketSubscriber.maximumImportQueueSize must be positive");
+    }   
+    auto maximumLatencyInSeconds
+        = static_cast<int> (options.maximumPacketLatency.count());
+    maximumLatencyInSeconds
+        = propertyTree.get<int> (
+             "DataPacketSubscriber.maximumLatencyInSeconds",
+             maximumLatencyInSeconds);
+    options.maximumPacketLatency
+        = std::chrono::seconds {maximumLatencyInSeconds}; 
+
+    auto maximumFutureTimeInMilliseconds
+        = static_cast<int> (options.maximumPacketFutureTime.count());
+    maximumFutureTimeInMilliseconds
+        = propertyTree.get<int> (
+             "DataPacketSubscriber.maximumFutureTimeInMilliseconds",
+             maximumFutureTimeInMilliseconds);
+    options.maximumPacketFutureTime
+        = std::chrono::milliseconds {maximumFutureTimeInMilliseconds};
+
+    // Logging
+    options.exportLogs = false;
+    if (propertyTree.get_optional<std::string> ("OTelHTTPLogOptions"))
+    {
+        UDataPacketCacheService::OTelOptions::HTTPLog logOptions;
+        logOptions.url
+            = ::getOTelCollectorURL(propertyTree, "OTelHTTPLogOptions");
+        logOptions.suffix
+            = propertyTree.get<std::string>
+              ("OTelHTTPLogOptions.suffix", "/v1/logs");
+        if (!logOptions.url.empty())
+        {
+            if (!logOptions.suffix.empty())
+            {   
+                if (!logOptions.url.ends_with("/") &&
+                    !logOptions.suffix.starts_with("/"))
+                {   
+                    logOptions.suffix = "/" + logOptions.suffix;
+                }   
+            }
+        }
+        if (!logOptions.url.empty())
+        {
+            options.exportLogs = true;
+            options.exportLogsWithHTTP = true;
+            options.otelHTTPLogOptions = logOptions;
+        }
+    }
+    else if (propertyTree.get_optional<std::string> ("OTelGRPCLogOptions"))
+    {
+#ifndef WITH_OTLP_GRPC
+        throw std::runtime_error(
+            "Recompile with Conan to use gRPC logs exporter option");
+#endif
+        UDataPacketCacheService::OTelOptions::GRPCLog logOptions;
+        logOptions.url
+            = ::getOTelCollectorURL(propertyTree, "OTelGRPCLogOptions");
+        auto certificatePath
+            = propertyTree.get_optional<std::string>
+              ("OTelGRPCLogOptions.certificate");
+        if (certificatePath)
+        {
+            if (std::filesystem::exists(*certificatePath))
+            {
+                logOptions.certificatePath = *certificatePath;
+            }
+        }
+        if (!logOptions.url.empty())
+        {
+            options.exportLogs = true;
+            options.exportLogsWithHTTP = false;
+            options.otelGRPCLogOptions = logOptions;
+        }
+    }
+
+    // Metrics
+    options.exportMetrics = false;
+    if (propertyTree.get_optional<std::string> ("OTelHTTPMetricsOptions"))
+    {
+        UDataPacketCacheService::OTelOptions::HTTPMetrics metricsOptions;
+        metricsOptions.url
+            = ::getOTelCollectorURL(propertyTree, "OTelHTTPMetricsOptions");
+        metricsOptions.suffix
+            = propertyTree.get<std::string> ("OTelHTTPMetricsOptions.suffix",
+                                             "/v1/metrics");
+        if (!metricsOptions.url.empty())
+        {
+            if (!metricsOptions.suffix.empty())
+            {
+                if (!metricsOptions.url.ends_with("/") &&
+                    !metricsOptions.suffix.starts_with("/"))
+                {
+                    metricsOptions.suffix = "/" + metricsOptions.suffix;
+                }
+            }
+        }
+        if (!metricsOptions.url.empty())
+        {
+            auto [exportInterval, exportTimeOut]
+                = ::getOTelMetricsIntervalAndTimeOut(
+                      propertyTree,
+                      "OTelHTTPMetricsOptions",
+                      metricsOptions.exportInterval,
+                      metricsOptions.exportTimeOut);
+            metricsOptions.exportInterval = exportInterval;
+            metricsOptions.exportTimeOut = exportTimeOut;
+            options.otelHTTPMetricsOptions = metricsOptions;
+            options.exportMetrics = true;
+            options.exportMetricsWithHTTP = true;
+        }
+    }
+    else if (propertyTree.get_optional<std::string> ("OTelGRPCMetricsOptions"))
+    {
+#ifndef WITH_OTLP_GRPC
+        throw std::runtime_error(
+            "Recompile with Conan to use gRPC metrics exporter option");
+#endif
+        UDataPacketCacheService::OTelOptions::GRPCMetrics metricsOptions;
+        metricsOptions.url
+            = getOTelCollectorURL(propertyTree, "OTelGRPCMetricsOptions");
+        auto [exportInterval, exportTimeOut]
+            = ::getOTelMetricsIntervalAndTimeOut(
+                  propertyTree,
+                  "OTelGRPCMetricsOptions",
+                  metricsOptions.exportInterval,
+                  metricsOptions.exportTimeOut);
+        metricsOptions.exportInterval = exportInterval;
+        metricsOptions.exportTimeOut = exportTimeOut;
+        auto certificatePath
+            = propertyTree.get_optional<std::string>
+              ("OTelGRPCMetricsOptions.certificate");
+        if (certificatePath)
+        {
+            if (std::filesystem::exists(*certificatePath))
+            {
+                metricsOptions.certificatePath = *certificatePath;
+            }
+        }
+        if (!metricsOptions.url.empty())
+        {
+            options.otelGRPCMetricsOptions = metricsOptions;
+            options.exportMetrics = true;
+            options.exportMetricsWithHTTP = false;
+        }
+    }
+
+    // Data packet subscriber options
 
     return options;
 }

@@ -1,32 +1,31 @@
-#ifndef UDATA_PACKET_CACHE_SERVICE_CIRCULAR_BUFFER_OPTIONS_HPP
-#define UDATA_PACKET_CACHE_SERVICE_CIRCULAR_BUFFER_OPTIONS_HPP
-#include <memory>
-#include <optional>
+#ifndef UDATA_PACKET_CACHE_SERVICE_STREAM_DEQUE_MAP_OPTIONS_HPP
+#define UDATA_PACKET_CACHE_SERVICE_STREAM_DEQUE_MAP_OPTIONS_HPP
 #include <chrono>
+#include <memory>
 namespace UDataPacketCacheService
 {
 /*!
- * @class CircularBufferOptions "circularBufferOptions.hpp" 
- * @brief Defines the options for the circular buffers.
+ * @class StreamDequeMapOptions "streamDequeMapOptions.hpp"
+ * @brief Defines the options for the stream deque map.
  * @copyright Ben Baker (University of Utah) distributed under the
  *            MIT NO AI license.
  */
-class CircularBufferOptions
+class StreamDequeMapOptions
 {
 public:
     /// @brief Constructor.
-    CircularBufferOptions();
+    StreamDequeMapOptions();
     /// @brief Copy constructor.
-    CircularBufferOptions(const CircularBufferOptions &options);
+    StreamDequeMapOptions(const StreamDequeMapOptions &options);
     /// @brief Move constructor.
-    CircularBufferOptions(CircularBufferOptions &&options) noexcept;
+    StreamDequeMapOptions(StreamDequeMapOptions &&options) noexcept;
 
     /// @brief Sets the maximum number of packets.
-    void setMaximumNumberOfPackets(int maxPackets);
+    //void setMaximumNumberOfPackets(int maxPackets);
     /// @result The maximum number of packets.
     /// @note By default this is 150 which, at packets of 2s duration,
     ///       will yield about 300 s (5 minutes) of data.
-    [[nodiscard]] int getMaximumNumberOfPackets() const noexcept;
+    //[[nodiscard]] int getMaximumNumberOfPackets() const noexcept;
     
     /// @brief Sets the maximum duration.  The duration is measured from now
     ///        minus this number.  Hence, if the packet end time is less than
@@ -34,21 +33,22 @@ public:
     ///        buffer.
     /// @param[in] maximumDuration   The maximum duration.
     /// @throws std::invalid_argument if the maximum duration is not postivie.
-    //void setMaximumDuration(const std::chrono::nanoseconds &maximumDuration);
+    void setMaximumDuration(const std::chrono::nanoseconds &maximumDuration);
     /// @result The maximum duration.
     /// @note By default this is 5 minutes.
-    //[[nodiscard]] std::chrono::nanoseconds getMaximumDuration() const noexcept;
+    [[nodiscard]] std::chrono::nanoseconds getMaximumDuration() const noexcept;
     
     /// @brief Destructor.
-    ~CircularBufferOptions();
+    ~StreamDequeMapOptions();
 
     /// @brief Copy assignment.
-    CircularBufferOptions &operator=(const CircularBufferOptions &options);
+    StreamDequeMapOptions &operator=(const StreamDequeMapOptions &options);
     /// @brief Move assignment.
-    CircularBufferOptions &operator=(CircularBufferOptions &&options) noexcept;
+    StreamDequeMapOptions &operator=(StreamDequeMapOptions &&options) noexcept;
+
 private:
-    class CircularBufferOptionsImpl;
-    std::unique_ptr<CircularBufferOptionsImpl> pImpl;
+    class StreamDequeMapOptionsImpl;
+    std::unique_ptr<StreamDequeMapOptionsImpl> pImpl;
 };
 }
 #endif

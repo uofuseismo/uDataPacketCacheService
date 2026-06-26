@@ -2,11 +2,11 @@
 #include <memory>
 #include <stdexcept>
 #include <utility>
-#include "uDataPacketCacheService/circularBufferMapOptions.hpp"
+#include "uDataPacketCacheService/streamDequeMapOptions.hpp"
 
 using namespace UDataPacketCacheService;
 
-class CircularBufferMapOptions::CircularBufferMapOptionsImpl
+class StreamDequeMapOptions::StreamDequeMapOptionsImpl
 {
 public:
     // Maximum duration.
@@ -14,27 +14,27 @@ public:
 };
 
 /// Constructor
-CircularBufferMapOptions::CircularBufferMapOptions() :
-    pImpl(std::make_unique<CircularBufferMapOptionsImpl> ())
+StreamDequeMapOptions::StreamDequeMapOptions() :
+    pImpl(std::make_unique<StreamDequeMapOptionsImpl> ())
 {
 }
 
 /// Copy constructor
-CircularBufferMapOptions::CircularBufferMapOptions(
-    const CircularBufferMapOptions &options)
+StreamDequeMapOptions::StreamDequeMapOptions(
+    const StreamDequeMapOptions &options)
 {
     *this = options;
 }
 
 /// Move constructor
-CircularBufferMapOptions::CircularBufferMapOptions(
-    CircularBufferMapOptions &&options) noexcept
+StreamDequeMapOptions::StreamDequeMapOptions(
+    StreamDequeMapOptions &&options) noexcept
 {
     *this = std::move(options);
 }
 
 /// Max duration
-void CircularBufferMapOptions::setMaximumDuration(
+void StreamDequeMapOptions::setMaximumDuration(
     const std::chrono::nanoseconds &duration)
 {
     constexpr std::chrono::nanoseconds one{1};
@@ -46,14 +46,14 @@ void CircularBufferMapOptions::setMaximumDuration(
 }
 
 std::chrono::nanoseconds 
-CircularBufferMapOptions::getMaximumDuration() const noexcept
+StreamDequeMapOptions::getMaximumDuration() const noexcept
 {
     return pImpl->mMaximumDuration;
 }
 
 /*
 /// Max packets
-void CircularBufferMapOptions::setMaximumNumberOfPackets(const int maxPackets)
+void StreamDequeMapOptions::setMaximumNumberOfPackets(const int maxPackets)
 {
     if (maxPackets <= 0)
     {
@@ -62,25 +62,25 @@ void CircularBufferMapOptions::setMaximumNumberOfPackets(const int maxPackets)
     pImpl->mMaximumNumberOfPackets = maxPackets;
 }
 
-int CircularBufferMapOptions::getMaximumNumberOfPackets() const noexcept
+int StreamDequeMapOptions::getMaximumNumberOfPackets() const noexcept
 {
     return pImpl->mMaximumNumberOfPackets;
 }
 */
 
 /// Copy assignment
-CircularBufferMapOptions& 
-CircularBufferMapOptions::operator=(const CircularBufferMapOptions &options)
+StreamDequeMapOptions& 
+StreamDequeMapOptions::operator=(const StreamDequeMapOptions &options)
 {
     if (&options == this){return *this;}
-    pImpl = std::make_unique<CircularBufferMapOptionsImpl> (*options.pImpl);
+    pImpl = std::make_unique<StreamDequeMapOptionsImpl> (*options.pImpl);
     return *this;
 }
 
 /// Move assignment
-CircularBufferMapOptions& 
-CircularBufferMapOptions::operator=(
-    CircularBufferMapOptions &&options) noexcept
+StreamDequeMapOptions& 
+StreamDequeMapOptions::operator=(
+    StreamDequeMapOptions &&options) noexcept
 {
     if (&options == this){return *this;}
     pImpl = std::move(options.pImpl);
@@ -88,4 +88,4 @@ CircularBufferMapOptions::operator=(
 }
 
 /// Destructor
-CircularBufferMapOptions::~CircularBufferMapOptions() = default;
+StreamDequeMapOptions::~StreamDequeMapOptions() = default;

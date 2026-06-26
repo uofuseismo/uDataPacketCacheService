@@ -25,6 +25,7 @@
 #include <grpcpp/security/auth_context.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include <uDataPacketServiceAPI/v1/subscribe_to_all_request.pb.h>
+#include <uDataPacketServiceAPI/v1/subscription_request.pb.h>
 #include <uDataPacketServiceAPI/v1/broadcast.grpc.pb.h>
 #include "uDataPacketCacheService/subscriber.hpp"
 #include "uDataPacketCacheService/subscriberOptions.hpp"
@@ -113,13 +114,36 @@ public:
         std::shared_ptr<spdlog::logger> logger,
         std::atomic<bool> *keepRunning
     ) :
-        mRequest(request),
+        mSubscribeToAllRequest(request),
         mAddPacketCallback(addPacketCallback),
         mLogger(std::move(logger)),
         mKeepRunning(keepRunning)
     {
         mClientContext.set_wait_for_ready(false); // Fail immediately if server isn't there
-        stub->async()->SubscribeToAll(&mClientContext, &mRequest, this);
+        stub->async()->SubscribeToAll(&mClientContext,
+                                      &mSubscribeToAllRequest,
+                                      this);
+        StartRead(&mPacket);
+        StartCall();
+    }
+
+    AsyncSubscriber
+    (
+        UDataPacketServiceAPI::V1::Broadcast::Stub *stub,
+        const UDataPacketServiceAPI::V1::SubscriptionRequest &request,
+        std::function<void (UDataPacketServiceAPI::V1::Packet &&)> &addPacketCallback,
+        std::shared_ptr<spdlog::logger> logger,
+        std::atomic<bool> *keepRunning
+    ) :
+        mSubscribeToSomeRequest(request),
+        mAddPacketCallback(addPacketCallback),
+        mLogger(std::move(logger)),
+        mKeepRunning(keepRunning)
+    {   
+        mClientContext.set_wait_for_ready(false); // Fail immediately if server isn't there
+        stub->async()->Subscribe(&mClientContext,
+                                 &mSubscribeToSomeRequest,
+                                 this);
         StartRead(&mPacket);
         StartCall();
     }
@@ -219,7 +243,8 @@ public:
     AsyncSubscriber& operator=(AsyncSubscriber &&) noexcept = delete;
 private:
     grpc::ClientContext mClientContext;
-    UDataPacketServiceAPI::V1::SubscribeToAllRequest mRequest;
+    UDataPacketServiceAPI::V1::SubscribeToAllRequest mSubscribeToAllRequest;
+    UDataPacketServiceAPI::V1::SubscriptionRequest mSubscribeToSomeRequest; 
     std::function
     <
         void (UDataPacketServiceAPI::V1::Packet &&packet)
@@ -254,11 +279,6 @@ public:
         if (!mOptions.hasGRPCOptions())
         {
             throw std::runtime_error("GRPC client options not set");
-        }
-        if (!mOptions.hasStreamIdentifiers())
-        {
-            throw std::invalid_argument(
-                "No streams selected to which to subscribe");
         }
         if (mLogger == nullptr)
         {
@@ -303,28 +323,56 @@ public:
                 lock.unlock();
                 if (!mKeepRunning.load()){break;}
             }
-            // Create request
-            UDataPacketServiceAPI::V1::SubscribeToAllRequest request;
-            auto subscriberIdentifier = mOptions.getIdentifier();
-            if (subscriberIdentifier)
-            {
-                request.set_identifier(*subscriberIdentifier);
-            }
-            //for (const auto &selection : mOptions.getStreamIdentifiers())
-            //{
-            //    *request.add_selections() = selection;
-            //}
             // Create channel
             auto channel
                 = ::createChannel(mOptions.getGRPCOptions(), mLogger.get());
             auto stub = UDataPacketServiceAPI::V1::Broadcast::NewStub(channel);
-            // Fire off the subscriber
-            AsyncSubscriber subscriber{stub.get(),
-                                       request,
-                                       mAddPacketCallback,
-                                       mLogger,
-                                       &mKeepRunning};
-            auto [status, hadSuccessfulRead] = subscriber.await();
+            // Create appropriate subscriber
+            std::unique_ptr<AsyncSubscriber> subscriber{nullptr};
+            auto subscriberIdentifier = mOptions.getIdentifier();
+            if (!mOptions.hasStreamIdentifiers())
+            {
+                SPDLOG_LOGGER_INFO(mLogger,
+                    "Creating a subscribe to all data packet subscriber");
+                UDataPacketServiceAPI::V1::SubscribeToAllRequest request;
+                if (subscriberIdentifier)
+                {
+                    request.set_identifier(*subscriberIdentifier);
+                }
+                subscriber
+                    = std::make_unique<AsyncSubscriber> (
+                         stub.get(),
+                         request,
+                         mAddPacketCallback,
+                         mLogger,
+                         &mKeepRunning);
+            }
+            else
+            {
+                SPDLOG_LOGGER_INFO(mLogger,
+                    "Creating selective subscriber with {} identifiers",
+                    mOptions.getStreamIdentifiers().size());
+                UDataPacketServiceAPI::V1::SubscriptionRequest request;
+                if (subscriberIdentifier)
+                {   
+                    request.set_identifier(*subscriberIdentifier);
+                }   
+                for (const auto &selection : mOptions.getStreamIdentifiers())
+                {
+                    *request.add_selections() = selection;
+                }
+                subscriber
+                    = std::make_unique<AsyncSubscriber> (
+                         stub.get(),
+                         request,
+                         mAddPacketCallback,
+                         mLogger,
+                         &mKeepRunning);
+            }
+#ifndef NDEBUG
+            assert(subscriber != nullptr);
+#endif
+            auto [status, hadSuccessfulRead] = subscriber->await();
             if (hadSuccessfulRead){kReconnect =-1;}
             if (status.ok())
             {

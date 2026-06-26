@@ -8,7 +8,10 @@
 //#include <catch2/matchers/catch_matchers.hpp>
 //#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <uDataPacketServiceAPI/v1/stream_identifier.pb.h>
-#include "uDataPacketCacheService/circularBufferOptions.hpp"
+#include "uDataPacketCacheService/streamDequeOptions.hpp"
+#include "uDataPacketCacheService/streamDequeMapOptions.hpp"
+//#include "uDataPacketCacheService/circularBufferOptions.hpp"
+//#include "uDataPacketCacheService/circularBufferMapOptions.hpp"
 #include "uDataPacketCacheService/grpcClientOptions.hpp"
 #include "uDataPacketCacheService/grpcServerOptions.hpp"
 #include "uDataPacketCacheService/serviceOptions.hpp"
@@ -16,6 +19,61 @@
 
 using namespace UDataPacketCacheService;
 
+TEST_CASE("UDataPacketCacheService::Options", "[streamDequeOptions]")
+{       
+    SECTION("Default")
+    {
+        constexpr int maxPackets{150};
+        const StreamDequeOptions options;
+        REQUIRE(options.getMaximumNumberOfPackets() == maxPackets);
+        //REQUIRE(options.getMaximumDuration() == duration);
+    }   
+        
+    SECTION("Options")
+    {   
+        constexpr int maxPackets{10};
+        //constexpr std::chrono::nanoseconds duration{std::chrono::seconds{44}};
+        StreamDequeOptions options; 
+        REQUIRE_THROWS(options.setMaximumNumberOfPackets(-1));
+        REQUIRE_THROWS(options.setMaximumNumberOfPackets(0));
+        REQUIRE_NOTHROW(options.setMaximumNumberOfPackets(maxPackets));
+        //REQUIRE_NOTHROW(options.setMaximumDuration(duration));
+
+        const StreamDequeOptions copy{options};
+        REQUIRE(copy.getMaximumNumberOfPackets() == maxPackets);
+        //REQUIRE(copy.getMaximumDuration() == duration);
+    }
+}
+
+TEST_CASE("UDataPacketCacheService::Options", "[streamDequeMapOptions]")
+{
+    SECTION("Default")
+    {
+        constexpr std::chrono::nanoseconds duration{std::chrono::minutes{5}};
+        //constexpr int maxPackets{150};
+        const StreamDequeMapOptions options;
+        //REQUIRE(options.getMaximumNumberOfPackets() == maxPackets);
+        REQUIRE(options.getMaximumDuration() == duration);
+    }
+
+    SECTION("Options")
+    {
+        //constexpr int maxPackets{10};
+        constexpr std::chrono::nanoseconds duration{std::chrono::seconds{44}};
+        StreamDequeMapOptions options;
+        REQUIRE_THROWS(options.setMaximumDuration(std::chrono::nanoseconds {-1}));
+        REQUIRE_THROWS(options.setMaximumDuration(std::chrono::nanoseconds {0}));
+        //REQUIRE_NOTHROW(options.setMaximumNumberOfPackets(maxPackets));
+        REQUIRE_NOTHROW(options.setMaximumDuration(duration));
+ 
+        const StreamDequeMapOptions copy{options};
+        //REQUIRE(copy.getMaximumNumberOfPackets() == maxPackets);
+        REQUIRE(copy.getMaximumDuration() == duration);
+    }   
+}
+
+
+/*
 TEST_CASE("UDataPacketCacheService::Options", "[circularBufferOptions]")
 {
     SECTION("Default")
@@ -41,6 +99,34 @@ TEST_CASE("UDataPacketCacheService::Options", "[circularBufferOptions]")
         //REQUIRE(copy.getMaximumDuration() == duration);
     }
 }
+
+TEST_CASE("UDataPacketCacheService::Options", "[circularBufferMapOptions]")
+{
+    SECTION("Default")
+    {
+        constexpr std::chrono::nanoseconds duration{std::chrono::minutes{5}};
+        //constexpr int maxPackets{150};
+        const CircularBufferMapOptions options;
+        //REQUIRE(options.getMaximumNumberOfPackets() == maxPackets);
+        REQUIRE(options.getMaximumDuration() == duration);
+    }
+
+    SECTION("Options")
+    {
+        //constexpr int maxPackets{10};
+        constexpr std::chrono::nanoseconds duration{std::chrono::seconds{44}};
+        CircularBufferMapOptions options;
+        REQUIRE_THROWS(options.setMaximumDuration(std::chrono::nanoseconds {-1}));
+        REQUIRE_THROWS(options.setMaximumDuration(std::chrono::nanoseconds {0}));
+        //REQUIRE_NOTHROW(options.setMaximumNumberOfPackets(maxPackets));
+        REQUIRE_NOTHROW(options.setMaximumDuration(duration));
+ 
+        const CircularBufferMapOptions copy{options};
+        //REQUIRE(copy.getMaximumNumberOfPackets() == maxPackets);
+        REQUIRE(copy.getMaximumDuration() == duration);
+    }   
+}
+*/
 
 TEST_CASE("UDataPacketCacheService", "[grpcClientOptions]")
 {

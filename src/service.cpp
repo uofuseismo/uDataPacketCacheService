@@ -24,7 +24,7 @@
 #include "uDataPacketCacheService/service.hpp"
 #include "uDataPacketCacheService/serviceOptions.hpp"
 #include "uDataPacketCacheService/grpcServerOptions.hpp"
-#include "uDataPacketCacheService/circularBufferMap.hpp"
+#include "uDataPacketCacheService/streamDequeMap.hpp"
 #include "uDataPacketCacheService/metricsSingleton.hpp"
 
 using namespace UDataPacketCacheService;
@@ -63,7 +63,7 @@ public:
         public:
             Reactor(const UDataPacketCacheServiceAPI::V1::DataRequest &request,
                     UDataPacketCacheServiceAPI::V1::DataResponse *response,
-                    CircularBufferMap &circularBufferMap,
+                    StreamDequeMap &streamDequeMap,
                     std::shared_ptr<spdlog::logger> logger) :
                 mLogger(std::move(logger))
             {
@@ -89,7 +89,7 @@ public:
             }
             std::shared_ptr<spdlog::logger> mLogger{nullptr};
         }; 
-        return new Reactor(*request, response, *mCircularBufferMap, mLogger);
+        return new Reactor(*request, response, *mStreamDequeMap, mLogger);
     }
 
     void start()
@@ -174,7 +174,7 @@ public:
     }
  
     ServiceOptions mOptions; 
-    std::shared_ptr<CircularBufferMap> mCircularBufferMap{nullptr};
+    std::shared_ptr<StreamDequeMap> mStreamDequeMap{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
     std::unique_ptr<grpc::Server> mServer{nullptr};
     std::atomic<bool> mKeepRunning{true};

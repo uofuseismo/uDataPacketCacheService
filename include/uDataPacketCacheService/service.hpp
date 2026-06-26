@@ -5,7 +5,7 @@
 #include <memory>
 namespace UDataPacketCacheService
 {
- class CircularBufferMap;
+ class StreamDequeMap;
  class ServiceOptions;
 }
 namespace UDataPacketCacheService
@@ -18,7 +18,7 @@ class Service
 {
 public:
     /// @brief Creates the service.
-    Service(std::shared_ptr<CircularBufferMap> circularBufferMap,
+    Service(std::shared_ptr<StreamDequeMap> streamDequeMap,
             const ServiceOptions &options,
             std::shared_ptr<spdlog::logger> logger);  
 
