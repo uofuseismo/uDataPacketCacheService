@@ -107,73 +107,73 @@ public:
                                    "Processing waveforms request for {}",
                                    requestIdentifier);
 
-                const auto &requests = request.stream_requests();
-                if (requests.empty())
+                const auto &streamRequests = request.stream_requests();
+                if (streamRequests.empty())
                 {
                     Finish({grpc::StatusCode::INVALID_ARGUMENT,
                             "No streams specified in request"});
                     return;
                 }
                 // Don't need some unnecessary checking for just one request
-                if (requests.size() == 1)
+                if (streamRequests.size() == 1)
                 {
-                    auto &streamIdentifier = requests[0].stream_identifier();
+                    std::string reason;
+                    if (!Utilities::isValid(streamRequests[0], reason))
+                    {
+                        Finish({grpc::StatusCode::INVALID_ARGUMENT, reason});
+                        return;
+                    }
+                    auto &streamIdentifier = streamRequests[0].stream_identifier();
                     auto requestStartTime
                         = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
-                            requests[0].start_time());
+                            streamRequests[0].start_time());
                     auto requestEndTime
                         = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
-                            requests[0].end_time());
+                            streamRequests[0].end_time());
+                    auto startAndEndTime
+                        = std::make_pair(
+                             std::chrono::nanoseconds {requestStartTime},
+                             std::chrono::nanoseconds {requestEndTime}
+                          );
+                    auto dataPackets
+                        = streamDequeMap.getPackets(streamIdentifier,
+                                                    startAndEndTime);
                     auto endTime
                         = Utilities::getNow<std::chrono::nanoseconds> ();
+                    Finish(grpc::Status::OK);
+                    return;
                 }
+
                 // This is a bear - we have to validate requests and deduplicate
                 struct Request
                 {
                     UDataPacketCacheServiceAPI::V1::StreamIdentifier identifier;
-                    std::chrono::nanoseconds startTime;
-                    std::chrono::nanoseconds endTime;
+                    std::pair<std::chrono::nanoseconds, 
+                              std::chrono::nanoseconds> startAndEndTime;
                 };
 
                 // Build up the requests
                 int requestNumber{0};
-                for (const auto &request : requests)
+                for (const auto &streamRequest : streamRequests)
                 {
                     requestNumber = requestNumber + 1;
-                    if (!request.has_stream_identifier())
+                    std::string reason;
+                    if (!Utilities::isValid(streamRequest, reason))
                     {
-                        Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                                "Stream identifier was not set on request "
-                               + std::to_string(requestNumber)});
+                        reason.append(" for stream request ");
+                        reason.append(std::to_string(requestNumber));
+                        Finish({grpc::StatusCode::INVALID_ARGUMENT, reason});
                         return;
                     }
-                    if (!request.has_start_time())
-                    {
-                        Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                                "Start time was not set on request "
-                               + std::to_string(requestNumber)});
-                        return;
-                    }
-                    if (!request.has_end_time())
-                    {
-                        Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                                "End time was not set on request "
-                               + std::to_string(requestNumber)});
-                        return;
-                    }
+                }
+                for (const auto &streamRequest : streamRequests)
+                {
                     auto requestStartTime
                         = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
-                            request.start_time());
+                            streamRequest.start_time());
                     auto requestEndTime
                         = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
-                            request.end_time());
-                    if (requestEndTime < requestStartTime)
-                    {
-                        Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                                "End time exceeds start time on request "
-                               + std::to_string(requestNumber)});
-                        return;
-                    }
+                            streamRequest.end_time());
                 }
 
                 Finish(grpc::Status::OK);

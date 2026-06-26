@@ -17,9 +17,8 @@
 #include <uDataPacketCacheServiceAPI/v1/packet.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/stream_identifier.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/data_type.pb.h>
-#include <uDataPacketCacheServiceAPI/v1/data_request.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/stream_identifier.pb.h>
-#include <uDataPacketCacheServcieAPI/v1/stream_request.pb.h>
+#include <uDataPacketCacheServiceAPI/v1/stream_request.pb.h>
 #include "uDataPacketCacheService/utilities.hpp"
 
 /*
@@ -531,6 +530,27 @@ bool UDataPacketCacheService::Utilities::isValid(
         reason = "Stream identifier not set";
         return false;
     }
+    const auto &streamIdentifier = request.stream_identifier();
+    if (!streamIdentifier.has_network())
+    {
+        reason = "Stream identifier's network not set";
+        return false;
+    }
+    if (!streamIdentifier.has_station())
+    {   
+        reason = "Stream identifier's station not set";
+        return false;
+    }   
+    if (!streamIdentifier.has_channel())
+    {   
+        reason = "Stream identifier's channel not set";
+        return false;
+    }
+    if (!streamIdentifier.has_location_code())
+    {   
+        reason = "Stream identifier's location code not set";
+        return false;
+    }   
     if (!request.has_start_time())
     {
         reason = "Start time not set";

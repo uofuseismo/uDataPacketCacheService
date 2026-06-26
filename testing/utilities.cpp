@@ -9,6 +9,7 @@
 #include <uDataPacketCacheServiceAPI/v1/packet.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/data_type.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/stream_identifier.pb.h>
+#include <uDataPacketCacheServiceAPI/v1/stream_request.pb.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include <uDataPacketServiceAPI/v1/data_type.pb.h>
 #include <uDataPacketServiceAPI/v1/stream_identifier.pb.h>
@@ -300,6 +301,47 @@ TEST_CASE("UDataPacketCacheService::Utilities", "[isValid]")
     REQUIRE(Utilities::isValid(packet, reason) == false);
     packet.set_data(::pack(data));
     REQUIRE(Utilities::isValid(packet, reason) == true);
+}
+
+TEST_CASE("UDataPacketCacheService::Utilities", "[isValidStreamRequest]")
+{
+    std::string reason;
+    const std::chrono::seconds startTimeS{1774627730};
+    const auto startTime
+        = google::protobuf::util::TimeUtil::SecondsToTimestamp(
+            startTimeS.count());
+    const auto endTime
+        = google::protobuf::util::TimeUtil::SecondsToTimestamp(
+            startTimeS.count() + 1);
+    const std::chrono::seconds badEndTimeS{1774627729};
+    const auto badEndTime
+        = google::protobuf::util::TimeUtil::SecondsToTimestamp(
+            badEndTimeS.count());
+
+    UDataPacketCacheServiceAPI::V1::StreamRequest request;
+    REQUIRE(Utilities::isValid(request, reason) == false);
+
+    UDataPacketCacheServiceAPI::V1::StreamIdentifier identifier;
+
+    identifier.set_network("UU");
+    *request.mutable_stream_identifier() = identifier;
+    REQUIRE(Utilities::isValid(request, reason) == false);
+    identifier.set_station("EKU");
+    *request.mutable_stream_identifier() = identifier;
+    REQUIRE(Utilities::isValid(request, reason) == false);
+    identifier.set_channel("EHZ");
+    *request.mutable_stream_identifier() = identifier;
+    REQUIRE(Utilities::isValid(request, reason) == false);
+    identifier.set_location_code("01");
+    *request.mutable_stream_identifier() = identifier;
+    REQUIRE(Utilities::isValid(request, reason) == false);
+
+    *request.mutable_start_time() = startTime;
+    REQUIRE(Utilities::isValid(request, reason) == false);
+    *request.mutable_end_time() = badEndTime;
+    REQUIRE(Utilities::isValid(request, reason) == false); 
+    *request.mutable_end_time() = endTime;
+    REQUIRE(Utilities::isValid(request, reason) == true);
 }
 
 TEST_CASE("UDataPacketCacheService::Utiliites", "[startEndTime]")
