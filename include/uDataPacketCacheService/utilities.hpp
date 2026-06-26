@@ -11,6 +11,7 @@ namespace UDataPacketCacheServiceAPI::V1
 {
  class StreamIdentifier;
  class Packet;
+ class StreamRequest;
 } 
 
 namespace UDataPacketCacheService::Utilities
@@ -44,5 +45,9 @@ template<typename T> T fromString(const std::string &identifier);
 /// @brief Utility to check if an import packet is valid.
 [[nodiscard]] bool isValid(const UDataPacketServiceAPI::V1::Packet &packet,
                            std::string &reason);
+/// @brief Utility to check if the stream request is valid.
+[[nodiscard]] bool isValid(const UDataPacketCacheServiceAPI::V1::StreamRequest &request,
+                           std::string &reason);
+
 }
 #endif

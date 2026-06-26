@@ -1,6 +1,8 @@
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <future>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -11,6 +13,7 @@
 #endif
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
+#include <google/protobuf/util/time_util.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
 #include <grpcpp/security/server_credentials.h>
@@ -26,6 +29,7 @@
 #include "uDataPacketCacheService/grpcServerOptions.hpp"
 #include "uDataPacketCacheService/streamDequeMap.hpp"
 #include "uDataPacketCacheService/metricsSingleton.hpp"
+#include "uDataPacketCacheService/utilities.hpp"
 
 using namespace UDataPacketCacheService;
 
@@ -61,13 +65,122 @@ public:
         class Reactor : public grpc::ServerUnaryReactor
         {
         public:
-            Reactor(const UDataPacketCacheServiceAPI::V1::DataRequest &request,
+            Reactor(grpc::CallbackServerContext *context,
+                    const UDataPacketCacheServiceAPI::V1::DataRequest &request,
                     UDataPacketCacheServiceAPI::V1::DataResponse *response,
+                    const bool isSecured,
+                    const GRPCServerOptions &grpcOptions,
                     StreamDequeMap &streamDequeMap,
                     std::shared_ptr<spdlog::logger> logger) :
                 mLogger(std::move(logger))
             {
+                auto startTime
+                    = Utilities::getNow<std::chrono::nanoseconds> ();
+                // Validate the client?
+                if (isSecured)
+                {
+                    auto accessToken = grpcOptions.getAccessToken();
+                    if (accessToken)
+                    {
+                        if (!::validateClient(context, *accessToken))
+                        {
+                            SPDLOG_LOGGER_WARN(mLogger,
+                                              "Unauthorized client {} rejected",
+                                               context->peer());
+                            Finish({grpc::StatusCode::UNAUTHENTICATED,
+                                    "Invalid access token"});
+                            return;
+                        }
+                    }
+                }
+                // Validate the request
+                std::string requestIdentifier{context->peer()};
+                if (request.has_identifier())
+                {
+                    requestIdentifier = requestIdentifier
+                                      + " ("
+                                      + request.identifier()
+                                      + ")";
+                    *response->mutable_identifier() = request.identifier();
+                }
+                SPDLOG_LOGGER_INFO(mLogger,
+                                   "Processing waveforms request for {}",
+                                   requestIdentifier);
+
+                const auto &requests = request.stream_requests();
+                if (requests.empty())
+                {
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "No streams specified in request"});
+                    return;
+                }
+                // Don't need some unnecessary checking for just one request
+                if (requests.size() == 1)
+                {
+                    auto &streamIdentifier = requests[0].stream_identifier();
+                    auto requestStartTime
+                        = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
+                            requests[0].start_time());
+                    auto requestEndTime
+                        = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
+                            requests[0].end_time());
+                    auto endTime
+                        = Utilities::getNow<std::chrono::nanoseconds> ();
+                }
+                // This is a bear - we have to validate requests and deduplicate
+                struct Request
+                {
+                    UDataPacketCacheServiceAPI::V1::StreamIdentifier identifier;
+                    std::chrono::nanoseconds startTime;
+                    std::chrono::nanoseconds endTime;
+                };
+
+                // Build up the requests
+                int requestNumber{0};
+                for (const auto &request : requests)
+                {
+                    requestNumber = requestNumber + 1;
+                    if (!request.has_stream_identifier())
+                    {
+                        Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                                "Stream identifier was not set on request "
+                               + std::to_string(requestNumber)});
+                        return;
+                    }
+                    if (!request.has_start_time())
+                    {
+                        Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                                "Start time was not set on request "
+                               + std::to_string(requestNumber)});
+                        return;
+                    }
+                    if (!request.has_end_time())
+                    {
+                        Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                                "End time was not set on request "
+                               + std::to_string(requestNumber)});
+                        return;
+                    }
+                    auto requestStartTime
+                        = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
+                            request.start_time());
+                    auto requestEndTime
+                        = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
+                            request.end_time());
+                    if (requestEndTime < requestStartTime)
+                    {
+                        Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                                "End time exceeds start time on request "
+                               + std::to_string(requestNumber)});
+                        return;
+                    }
+                }
+
                 Finish(grpc::Status::OK);
+                auto endTime
+                    = Utilities::getNow<std::chrono::nanoseconds> ();
+                auto elapsedTime
+                    = static_cast<double> (endTime.count() - startTime.count())*1.e-9;
             }
         private:
             void OnDone() override
@@ -89,19 +202,25 @@ public:
             }
             std::shared_ptr<spdlog::logger> mLogger{nullptr};
         }; 
-        return new Reactor(*request, response, *mStreamDequeMap, mLogger);
+        return new Reactor(context,
+                           *request,
+                           response,
+                           mSecured,
+                           mGRPCOptions,
+                           *mStreamDequeMap,
+                           mLogger);
     }
 
     void start()
     {
         mKeepRunning.store(true);
 
-        const auto grpcOptions = mOptions.getGRPCOptions();
-        const auto address = grpcOptions.getHost() + ":"
-                           + std::to_string(grpcOptions.getPort());
+        mGRPCOptions = mOptions.getGRPCOptions();
+        const auto address = mGRPCOptions.getHost() + ":"
+                           + std::to_string(mGRPCOptions.getPort());
         grpc::ServerBuilder builder;
-        if (grpcOptions.getServerKey() == std::nullopt ||
-            grpcOptions.getServerCertificate() == std::nullopt)
+        if (mGRPCOptions.getServerKey() == std::nullopt ||
+            mGRPCOptions.getServerCertificate() == std::nullopt)
         {        
             SPDLOG_LOGGER_INFO(mLogger,
                                "Initiating non-secured subscribe service");
@@ -111,8 +230,8 @@ public:
         }
         else
         {
-            auto serverKey = grpcOptions.getServerKey();
-            auto serverCertificate = grpcOptions.getServerCertificate();
+            auto serverKey = mGRPCOptions.getServerKey();
+            auto serverCertificate = mGRPCOptions.getServerCertificate();
 #ifndef NDEBUG
             assert(serverKey != std::nullopt);
             assert(serverCertificate != std::nullopt);
@@ -177,6 +296,7 @@ public:
     std::shared_ptr<StreamDequeMap> mStreamDequeMap{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
     std::unique_ptr<grpc::Server> mServer{nullptr};
+    GRPCServerOptions mGRPCOptions;
     std::atomic<bool> mKeepRunning{true};
     bool mSecured{false};
     bool mStarted{false};

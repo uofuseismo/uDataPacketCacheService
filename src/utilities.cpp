@@ -17,6 +17,8 @@
 #include <uDataPacketCacheServiceAPI/v1/packet.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/stream_identifier.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/data_type.pb.h>
+#include <uDataPacketCacheServiceAPI/v1/data_request.pb.h>
+#include <uDataPacketCacheServiceAPI/v1/stream_identifier.pb.h>
 #include "uDataPacketCacheService/utilities.hpp"
 
 /*
@@ -517,4 +519,31 @@ bool UDataPacketCacheService::Utilities::isValid(
         return false;
     }
     return true; 
+}
+
+bool UDataPacketCacheService::Utilities::isValid(
+    const UDataPacketCacheServiceAPI::V1::StreamRequest &request,
+    std::string &reason)
+{
+    if (!request.has_stream_identifier())
+    {
+        reason = "Stream identifier not set";
+        return false;
+    }
+    if (!request.has_start_time())
+    {
+        reason = "Start time not set";
+        return false;
+    }
+    if (!request.has_end_time())
+    {
+        reason = "End time not set";
+        return false;
+    }
+    if (request.start_time() > request.end_time())
+    {
+        reason = "Start time exceeds end time";
+        return false;
+    }
+    return true;
 }

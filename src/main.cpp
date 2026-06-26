@@ -15,12 +15,16 @@
 #include <string>
 #include <thread>
 #include <utility>
+#ifndef NDEBUG
+#include <cassert>
+#endif
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include "uDataPacketCacheService/streamDequeMap.hpp"
+#include "uDataPacketCacheService/streamDequeMapOptions.hpp"
 #include "uDataPacketCacheService/service.hpp"
 #include "uDataPacketCacheService/subscriber.hpp"
 #include "uDataPacketCacheService/metricsSingleton.hpp"
@@ -47,14 +51,22 @@ public:
         mOptions(std::move(options)),
         mLogger(std::move(logger))
     {
+#ifndef NDEBUG
+        assert(mLogger != nullptr);
+#endif
+
         mMaximumImportQueueSize = mOptions.maximumImportQueueSize;
         mImportQueue.set_capacity(mMaximumImportQueueSize);
 
+StreamDequeMapOptions dmopt;
+        mStreamDequeMap = std::make_unique<StreamDequeMap> (dmopt, mLogger);
+ 
         mDataPacketSubscriber
             = std::make_unique<Subscriber> (
                 mOptions.dataPacketSubscriberOptions,
                 mAddPacketCallback,
                 mLogger);
+
     }
 
     /// @brief Destructor
@@ -63,9 +75,36 @@ public:
         stop();
     }
 
+    void start()
+    {
+        mKeepRunning.store(true);
+
+        // Make sure packet processor is ready to work
+        auto packetProcessorFuture = std::async(&Process::processPackets, this);
+        mFuturesMap.insert_or_assign("PacketProcessor", std::move(packetProcessorFuture));
+
+        // Start getting packets
+        auto packetSubscriberFuture = mDataPacketSubscriber->start();
+        mFuturesMap.insert_or_assign("DataPacketSubscriber", std::move(packetSubscriberFuture));
+
+        // Won't get packets so fast we need to immediately clean
+        auto cleanDequesFuture = std::async(&Process::cleanDeques, this);
+        mFuturesMap.insert_or_assign("CleanDeques", std::move(cleanDequesFuture));
+
+        // Finally, open this for business
+        // TODO add service
+
+        mIsRunning = true;
+        handleMainThread();
+    }
+
     /// @brief Stops processes
     void stop()
     {
+        // Help my cleaning thread out
+        mTerminateRequested = true;
+        mTerminateCondition.notify_all();
+
         if (mIsRunning)
         {
             mKeepRunning.store(false);
@@ -83,16 +122,22 @@ public:
             }
             std::this_thread::sleep_for(std::chrono::milliseconds {15});
         }
+
+        for (auto &futurePair : mFuturesMap) 
+        {
+            if (futurePair.second.valid()){futurePair.second.get();}
+        }
     }
 
     /// Allows import thread to add packets
     void addPacket(UDataPacketServiceAPI::V1::Packet &&packet)
     {
         // Make sure there's space in the queue
+        int nPopped{0};
         if (static_cast<size_t> (mImportQueue.size()) >= 
             mMaximumImportQueueSize)
         {
-            SPDLOG_LOGGER_WARN(mLogger, "Queue full - popping packets");
+            nPopped = nPopped + 1;
             while (static_cast<size_t> (mImportQueue.size()) >=
                    mMaximumImportQueueSize)
             {
@@ -104,6 +149,12 @@ public:
                 }
             }   
         }
+        if (nPopped > 0)
+        {
+            SPDLOG_LOGGER_WARN(mLogger,
+                               "Overfull import queue - popped {} packets",
+                               nPopped);
+        }
         // Add it
         if (!mImportQueue.try_push(std::move(packet)))
         {
@@ -111,9 +162,44 @@ public:
         }
     }
 
+    /// Clean packets
+    void cleanDeques()
+    {
+        constexpr std::chrono::seconds cleanupInterval{30};
+        int nConsecutiveErrors{0};
+        while (mKeepRunning.load())
+        {
+            try
+            {
+                mStreamDequeMap->removeExpiredPackets();
+                nConsecutiveErrors = 0;
+            }
+            catch (const std::exception &e)
+            {
+                nConsecutiveErrors = nConsecutiveErrors + 1;
+                SPDLOG_LOGGER_WARN(mLogger,
+                    "Failed to remove expired packets from deques because {}",
+                    std::string {e.what()});
+            }
+            if (nConsecutiveErrors > 5)
+            {
+                throw std::runtime_error(
+                    "Too many consective errosr cleaning deques");
+            }
+            // Wait
+            std::unique_lock<std::mutex> lock(mStopMutex);
+            mTerminateCondition.wait_for(lock, cleanupInterval,
+                                         [this]
+                                         {   
+                                            return mTerminateRequested;
+                                         }); 
+        }
+    } 
+
     /// Propagate packets to the backend
     void processPackets()
     {
+        SPDLOG_LOGGER_INFO(mLogger, "Packet processing thread started");
         auto &metrics
             = UDataPacketCacheService::MetricsSingleton::getInstance();
         auto maximumLatency
@@ -175,7 +261,7 @@ public:
                 // Add the packet to the collection of stream deques
                 try
                 {
-                    //mStreamDequeMap->addPacket(std::move(packet)); 
+                    mStreamDequeMap->addPacket(std::move(packet)); 
                 }
                 catch (const std::exception &e)
                 {
@@ -237,13 +323,13 @@ public:
     {
         SPDLOG_LOGGER_INFO(mLogger, "Main thread entering waiting loop");
         catchSignals();
-        while (!mStopRequested)
+        while (!mStopProcessRequested)
         {
             if (mInterrupted)
             {
                 SPDLOG_LOGGER_INFO(mLogger,
                                   "SIGINT/SIGTERM signal received!");
-                mStopRequested = true;
+                mStopProcessRequested = true;
                 break;
             }
             constexpr std::chrono::milliseconds waitForFuture {5};
@@ -251,19 +337,19 @@ public:
             {
                 SPDLOG_LOGGER_CRITICAL(mLogger,
                    "Futures exception caught; terminating app");
-                mStopRequested = true;
+                mStopProcessRequested = true;
                 break;
             }
             printSummary();
             std::unique_lock<std::mutex> lock(mStopMutex);
             constexpr std::chrono::milliseconds pause{100};
-            mStopCondition.wait_for(lock, pause,
-                                    [this]
-                                    {
-                                        return mStopRequested;
-                                    });
+            mStopProcessCondition.wait_for(lock, pause,
+                                           [this]
+                                           {
+                                               return mStopProcessRequested;
+                                           });
         }
-        if (mStopRequested)
+        if (mStopProcessRequested)
         {
             SPDLOG_LOGGER_DEBUG(mLogger,
                                 "Stop request received.  Terminating...");
@@ -291,7 +377,8 @@ public:
     std::unique_ptr<Subscriber> mDataPacketSubscriber{nullptr};
     std::shared_ptr<StreamDequeMap> mStreamDequeMap{nullptr};
     mutable std::mutex mStopMutex;
-    std::condition_variable mStopCondition;
+    std::condition_variable mStopProcessCondition;
+    std::condition_variable mTerminateCondition;
     tbb::concurrent_bounded_queue
     <
         UDataPacketServiceAPI::V1::Packet
@@ -313,7 +400,8 @@ public:
     };
     std::map<std::string, std::future<void>> mFuturesMap;
     int64_t mMaximumImportQueueSize{4096};
-    bool mStopRequested{false};
+    bool mStopProcessRequested{false};
+    bool mTerminateRequested{false};
     bool mIsRunning{false};
     std::atomic<bool> mKeepRunning{true};
 };
@@ -402,5 +490,20 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    try
+    {
+        process->start();
+        UDataPacketCacheService::Metrics::cleanup();
+        UDataPacketCacheService::Logger::cleanup();
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_CRITICAL(logger,
+                               "Application failed because {}",
+                               std::string {e.what()});
+        UDataPacketCacheService::Metrics::cleanup();
+        UDataPacketCacheService::Logger::cleanup();
+        return EXIT_FAILURE;
+    }
     return EXIT_SUCCESS;
 }

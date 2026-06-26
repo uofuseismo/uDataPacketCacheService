@@ -13,6 +13,7 @@
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include "uDataPacketCacheService/serviceOptions.hpp"
+#include "uDataPacketCacheService/streamDequeMapOptions.hpp"
 #include "uDataPacketCacheService/subscriberOptions.hpp"
 #include "uDataPacketCacheService/grpcServerOptions.hpp"
 #include "uDataPacketCacheService/grpcClientOptions.hpp"

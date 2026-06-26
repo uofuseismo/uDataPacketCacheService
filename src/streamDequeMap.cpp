@@ -8,6 +8,7 @@
 #include <vector>
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <oneapi/tbb/concurrent_map.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include <uDataPacketServiceAPI/v1/stream_identifier.pb.h>
@@ -24,6 +25,21 @@ using namespace UDataPacketCacheService;
 class StreamDequeMap::StreamDequeMapImpl
 {
 public:
+    StreamDequeMapImpl(const StreamDequeMapOptions &options,
+                       std::shared_ptr<spdlog::logger> logger) :
+        mOptions(options),
+        mLogger(std::move(logger))
+    {
+        if (mLogger == nullptr)
+        {
+            // NOLINTBEGIN(misc-include-cleaner)
+            auto classId
+                = std::to_string (reinterpret_cast<std::uintptr_t> (this));
+            mLogger = spdlog::stdout_color_mt("StreamDequeConsole-" + classId);
+            // NOLINTEND(misc-include-cleaner)
+        }
+    }
+
     void addPacket(UDataPacketServiceAPI::V1::Packet &&packet)
     {
         auto streamIdentifier = Utilities::toString(packet.stream_identifier());
@@ -39,15 +55,17 @@ public:
             = std::make_unique<StreamDeque> (options, std::move(packet));
         auto newNode
             = std::make_pair (streamIdentifier, std::move(streamDeque));
+        // N.B. this is a concurrently safe modifier
         auto [jdx, inserted] = mStreamDequeMap.insert(std::move(newNode));
         if (!inserted)
         {
             throw std::runtime_error("Failed to add stream deque for "
                                    + streamIdentifier);
         }
+        SPDLOG_LOGGER_INFO(mLogger, "Added {} to deque map", streamIdentifier);
     }
 
-    void cleanStreamDeques()
+    void removeExpiredPackets()
     {
         auto oldestTime = Utilities::getNow<std::chrono::nanoseconds> ()
                         - mOptions.getMaximumDuration();
@@ -94,6 +112,13 @@ public:
     > mStreamDequeMap;
 };
 
+StreamDequeMap::StreamDequeMap(
+    const StreamDequeMapOptions &options,
+    std::shared_ptr<spdlog::logger> logger) :
+    pImpl(std::make_unique<StreamDequeMapImpl> (options, std::move(logger)))
+{
+}
+
 /// Add a packet to the map
 void StreamDequeMap::addPacket(UDataPacketServiceAPI::V1::Packet &&packet)
 {
@@ -105,6 +130,12 @@ void StreamDequeMap::addPacket(
 {
     auto packet = packetIn;
     addPacket(std::move(packet));
+}
+
+/// Remove expired packets
+void StreamDequeMap::removeExpiredPackets()
+{
+    pImpl->removeExpiredPackets();
 }
 
 /// Destructor

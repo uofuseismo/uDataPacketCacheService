@@ -29,12 +29,15 @@ namespace UDataPacketCacheService
 class StreamDequeMap
 {
 public:
-StreamDequeMap();
-    StreamDequeMap(std::shared_ptr<spdlog::logger> logger);
+    StreamDequeMap(const StreamDequeMapOptions &options,
+                   std::shared_ptr<spdlog::logger> logger);
     
     /// @brief Adds a packet to the map.
     void addPacket(UDataPacketServiceAPI::V1::Packet &&packet);
     void addPacket(const UDataPacketServiceAPI::V1::Packet &packet);
+
+    /// @brief Cleans out expired packets from the stream deques.
+    void removeExpiredPackets();
 
     /// @result True indicates the stream exists.
     [[nodiscard]] bool exists(const std::string &identifier) const noexcept;
