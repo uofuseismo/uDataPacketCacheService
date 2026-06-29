@@ -1,3 +1,5 @@
+#include <iostream>
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -6,6 +8,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+#ifndef NDEBUG
+#include <cassert>
+#endif
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -78,13 +83,13 @@ public:
     }
 
     [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::Packet>
-         getPackets(const UDataPacketCacheServiceAPI::V1::StreamIdentifier &identifier,
-                    const std::pair<std::chrono::nanoseconds,
-                                    std::chrono::nanoseconds> &startAndEndTime) const
+        getPackets(const UDataPacketCacheServiceAPI::V1::StreamIdentifier &identifier,
+                   const std::pair<std::chrono::nanoseconds,
+                                   std::chrono::nanoseconds> &startAndEndTime) const
     {
         auto streamIdentifier = Utilities::toString(identifier);
         std::vector<UDataPacketCacheServiceAPI::V1::Packet> result;
-        auto idx = mStreamDequeMap.find(streamIdentifier);
+        const auto idx = mStreamDequeMap.find(streamIdentifier);
         if (idx != mStreamDequeMap.end())
         {
             result = idx->second->getPackets(startAndEndTime);
@@ -92,29 +97,33 @@ public:
         return result; 
     }
 
-    [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> getAvailableStreams() const
+    [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier>
+        getAvailableStreams() const
     {
         std::vector<std::string> streamNames;
         streamNames.reserve(mStreamDequeMap.size());
         for (const auto &idx : mStreamDequeMap)
         {
+#ifndef NDEBUG
+            auto thisName = idx.first;
+            assert(!std::any_of(streamNames.begin(), streamNames.end(),
+                                [thisName](const auto &x)
+                                {
+                                    return x == thisName;
+                                }));
+#endif
             streamNames.push_back(idx.first); 
         }
         // Now build the streams
         std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> result;
         result.reserve(streamNames.size());
-        std::set<std::string> streamNamesSet;
         for (const auto &streamName : streamNames)
         {
-            if (!streamNamesSet.contains(streamName))
-            {
-                auto identifier
-                    = Utilities::fromString
-                      <UDataPacketCacheServiceAPI::V1::StreamIdentifier>
-                      (streamName);
-                result.push_back(std::move(identifier));
-                streamNamesSet.insert(streamName);
-            }
+            auto identifier
+                = Utilities::fromString
+                  <UDataPacketCacheServiceAPI::V1::StreamIdentifier>
+                  (streamName);
+            result.push_back(std::move(identifier));
         }
         return result;
     }

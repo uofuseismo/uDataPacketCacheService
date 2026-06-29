@@ -1,3 +1,4 @@
+#include <iostream>
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
@@ -374,9 +375,9 @@ TEST_CASE("UDataPacketCacheService::StreamDequeMap", "[streamDequeMap]")
     identifiers.push_back(Utilities::convert(identifierCEU));
     identifiers.push_back(Utilities::convert(identifierHVU));
 
-    auto packetsICU = ::createPackets(nPackets, identifierICU);
-    auto packetsCEU = ::createPackets(nPackets, identifierCEU);
-    auto packetsHVU = ::createPackets(nPackets, identifierHVU);
+    auto packetsICU = ::createPackets(nPackets,     identifierICU);
+    auto packetsCEU = ::createPackets(nPackets + 1, identifierCEU);
+    auto packetsHVU = ::createPackets(nPackets + 2, identifierHVU);
 
     SECTION("Simple Usage")
     {
@@ -420,7 +421,7 @@ TEST_CASE("UDataPacketCacheService::StreamDequeMap", "[streamDequeMap]")
         REQUIRE(map.getAvailableStreams().size() == 3);
 
         // Run it backwards to screw with insertion
-        for (auto i = static_cast<int> (packetsCEU.size()); i >= 1; --i)
+        for (auto i = static_cast<int> (packetsCEU.size()) - 1; i >= 1; --i)
         {
             map.addPacket(packetsCEU.at(i));
         }
@@ -439,11 +440,38 @@ TEST_CASE("UDataPacketCacheService::StreamDequeMap", "[streamDequeMap]")
         auto endTime
             = Utilities::getEndTime<std::chrono::nanoseconds>
               (packetsICU.back());
-        auto recovered
+        auto recoveredICU
             = map.getPackets(Utilities::convert(identifierICU),
                              std::pair {startTime, endTime});
-        REQUIRE(packetsMatch(packetsICU, recovered) == true);
-        } 
+        REQUIRE(packetsMatch(packetsICU, recoveredICU) == true);
+        }
+
+        {
+        auto startTime
+            = Utilities::getStartTime<std::chrono::nanoseconds>
+              (packetsCEU.front()) - std::chrono::nanoseconds {1};
+        auto endTime
+            = Utilities::getEndTime<std::chrono::nanoseconds>
+              (packetsCEU.back()) + std::chrono::nanoseconds {1};
+        auto recoveredCEU
+            = map.getPackets(Utilities::convert(identifierCEU),
+                             std::pair {startTime, endTime});
+        REQUIRE(packetsMatch(packetsCEU, recoveredCEU) == true);
+        }
+
+        {
+        auto startTime
+            = Utilities::getStartTime<std::chrono::nanoseconds>
+              (packetsHVU.front()) - std::chrono::nanoseconds {1};
+        auto endTime
+            = Utilities::getEndTime<std::chrono::nanoseconds>
+              (packetsHVU.back()) + std::chrono::nanoseconds {1};
+        auto recoveredHVU
+            = map.getPackets(Utilities::convert(identifierHVU),
+                             std::pair {startTime, endTime});
+        REQUIRE(packetsMatch(packetsHVU, recoveredHVU) == true);
+        }
+
     }
     
 }
