@@ -1,0 +1,13 @@
+edition = "2023";
+package UDataPacketCacheServiceAPI.V1;
+import "uDataPacketCacheServiceAPI/v1/stream_identifier.proto";
+
+/**
+ * Contains the streams currently available in this instance of the service.
+ */
+message AvailableStreamsResponse {
+   // A request identifier.
+   string identifier = 1 [default = ""];
+   // The streams available at this endpoint.
+   repeated StreamIdentifier stream_identifiers = 2;
+}
