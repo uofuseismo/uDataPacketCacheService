@@ -4,15 +4,22 @@ package UDataPacketCacheServiceAPI.V1;
 
 import "uDataPacketCacheServiceAPI/v1/data_request.proto";
 import "uDataPacketCacheServiceAPI/v1/data_response.proto";
+import "uDataPacketCacheServiceAPI/v1/available_streams_request.proto";
+import "uDataPacketCacheServiceAPI/v1/available_streams_response.proto";
 
 /**
- * The data cache service stores recently acquired data packets and makes
- * them available to subsequent applications in a very low-latency manner.
+ * The data cache service stores recently acquired seismic data packets and makes
+ * these packets available to subsequent applications in a very low-latency manner.
  * This is most useful for near-real-time applications.  For data queries
- * requesting data older than approximately five minutes it is recommended
- * to use a different service.
+ * requesting data older than approximately five minutes or requiring highly
+ * consistent queries it is recommended to use a different service.  
  */
 service DataPacketCacheService { 
   // Fetches the time series corresponding for the specified streams.
   rpc GetTimeSeries(DataRequest) returns(DataResponse) {}; 
+  // Fetches the streams available at this endpoint.  Note, if a subsequent
+  // query is routed to a different instance then a particular stream may
+  // not be available and result in no data being returned.  The best solution
+  // in this instance is to retry the request for the missing stream(s).
+  rpc GetAvailableStreams(AvailableStreamsRequest) returns(AvailableStreamsResponse) {};
 }

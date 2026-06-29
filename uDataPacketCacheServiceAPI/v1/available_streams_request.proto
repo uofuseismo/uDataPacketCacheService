@@ -1,0 +1,12 @@
+edition = "2023";
+package UDataPacketCacheServiceAPI.V1;
+
+/**
+ * Queries this endpoint for the available streams.  Note, services instances do
+ * not coordinate data so it is a possible for a subsequent data request to be 
+ * routed to another endpoint and not see a stream.
+ */
+message AvailableStreamsRequest {
+   // A request identifier.
+   string identifier = 1 [default = ""];
+}
