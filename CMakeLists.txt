@@ -115,6 +115,8 @@ set(IMPORT_PROTO_SRC
     uDataPacketServiceAPI/v1/subscription_request.proto
     uDataPacketServiceAPI/v1/broadcast.proto)
 set(SERVICE_PROTO_SRC
+    uDataPacketCacheServiceAPI/v1/available_streams_request.proto
+    uDataPacketCacheServiceAPI/v1/available_streams_response.proto
     uDataPacketCacheServiceAPI/v1/data_type.proto
     uDataPacketCacheServiceAPI/v1/data_request.proto
     uDataPacketCacheServiceAPI/v1/data_response.proto

@@ -20,7 +20,7 @@ namespace UDataPacketCacheService
 namespace UDataPacketCacheService
 {
 /*!
- * @class StreamDequeMap "circularBufferMap.hpp"
+ * @class StreamDequeMap "streamDequeMap.hpp"
  * @brief This is a thread-safe class for managing the individual stream
  *        deques.
  * @copyright Ben Baker (University of Utah) distributed under the
@@ -29,6 +29,9 @@ namespace UDataPacketCacheService
 class StreamDequeMap
 {
 public:
+    /// @brief Constructor.
+    /// @param[in] options  The options defining the containers behavior.
+    /// @param[in] logger   The logging utility.
     StreamDequeMap(const StreamDequeMapOptions &options,
                    std::shared_ptr<spdlog::logger> logger);
     
@@ -55,6 +58,10 @@ public:
          getPackets(const UDataPacketCacheServiceAPI::V1::StreamIdentifier &identifier,
                     const std::pair<std::chrono::nanoseconds,
                                     std::chrono::nanoseconds> &startAndEndTime) const;
+
+    /// @result Gets the available streams in this container.
+    [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> getAvailableStreams() const;
+
     /// @brief Destructor.
     ~StreamDequeMap();
     StreamDequeMap(const StreamDequeMap &) = delete;

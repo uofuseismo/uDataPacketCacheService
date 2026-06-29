@@ -6,16 +6,21 @@
 #include <random>
 #include <vector>
 #include <utility>
+#include <spdlog/logger.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <google/protobuf/util/time_util.h>
 #include <catch2/catch_test_macros.hpp>
 //#include <catch2/matchers/catch_matchers.hpp>
 //#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <uDataPacketCacheServiceAPI/v1/stream_identifier.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/packet.pb.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include <uDataPacketServiceAPI/v1/stream_identifier.pb.h>
 #include <uDataPacketServiceAPI/v1/data_type.pb.h>
 #include "uDataPacketCacheService/streamDeque.hpp"
 #include "uDataPacketCacheService/streamDequeOptions.hpp"
+#include "uDataPacketCacheService/streamDequeMap.hpp"
+#include "uDataPacketCacheService/streamDequeMapOptions.hpp"
 #include "uDataPacketCacheService/utilities.hpp"
 #include "packUnpack.hpp"
 
@@ -51,14 +56,9 @@ UDataPacketServiceAPI::V1::Packet
 }
 
 std::vector<UDataPacketServiceAPI::V1::Packet>
-    createPackets(int nPackets = 10)
+    createPackets(const int nPackets,
+                  const UDataPacketServiceAPI::V1::StreamIdentifier &identifier)
 {
-    UDataPacketServiceAPI::V1::StreamIdentifier identifier; 
-    identifier.set_network("UU");
-    identifier.set_station("ICU");
-    identifier.set_channel("EHZ");
-    identifier.set_location_code("01");
-
     std::vector<UDataPacketServiceAPI::V1::Packet> packets;
 
     constexpr double samplingRate{100};
@@ -106,6 +106,17 @@ std::vector<UDataPacketServiceAPI::V1::Packet>
                          Utilities::getEndTime<std::chrono::nanoseconds> (rhs);
               });
     return packets;
+}
+
+std::vector<UDataPacketServiceAPI::V1::Packet>
+    createPackets(const int nPackets) 
+{
+    UDataPacketServiceAPI::V1::StreamIdentifier identifier; 
+    identifier.set_network("UU");
+    identifier.set_station("ICU");
+    identifier.set_channel("EHZ");
+    identifier.set_location_code("01");
+    return ::createPackets(nPackets, identifier);
 }
 
 bool packetMatches(const UDataPacketServiceAPI::V1::Packet &reference,
@@ -331,4 +342,108 @@ TEST_CASE("UDataPacketCacheService::StreamDeque", "[streamDequeBasic]")
                                     queriedPackets.at(i - iStart)) == true);
         }
     }
+}
+
+TEST_CASE("UDataPacketCacheService::StreamDequeMap", "[streamDequeMap]")
+{   
+    constexpr int maxPackets{10}; // Keep it easy for now
+    const int nPackets{10};
+    //StreamDequeOptions options;
+    //options.setMaximumNumberOfPackets(maxPackets);
+
+    UDataPacketServiceAPI::V1::StreamIdentifier identifierICU;
+    identifierICU.set_network("UU");
+    identifierICU.set_station("ICU");
+    identifierICU.set_channel("EHZ");
+    identifierICU.set_location_code("01");
+
+    UDataPacketServiceAPI::V1::StreamIdentifier identifierCEU;
+    identifierCEU.set_network("UU");
+    identifierCEU.set_station("CEU");
+    identifierCEU.set_channel("HHZ");
+    identifierCEU.set_location_code("01");
+
+    UDataPacketServiceAPI::V1::StreamIdentifier identifierHVU;
+    identifierHVU.set_network("UU");
+    identifierHVU.set_station("HVU");
+    identifierHVU.set_channel("HHZ");
+    identifierHVU.set_location_code("01");
+
+    std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> identifiers;
+    identifiers.push_back(Utilities::convert(identifierICU));
+    identifiers.push_back(Utilities::convert(identifierCEU));
+    identifiers.push_back(Utilities::convert(identifierHVU));
+
+    auto packetsICU = ::createPackets(nPackets, identifierICU);
+    auto packetsCEU = ::createPackets(nPackets, identifierCEU);
+    auto packetsHVU = ::createPackets(nPackets, identifierHVU);
+
+    SECTION("Simple Usage")
+    {
+        // NOLINTNEXTLINE(misc-include-cleaner)
+        auto logger = spdlog::stdout_color_mt("StreamDequeConsole-simple");
+
+        // Set a large duration to make sure everything that goes in comes out 
+        StreamDequeMapOptions options;
+        options.setMaximumDuration(std::chrono::minutes {10});
+
+        StreamDequeMap map{options, logger};
+        REQUIRE_NOTHROW(map.addPacket(packetsICU.at(0)));
+        auto res1 = map.getAvailableStreams();
+        REQUIRE(res1.size() == 1);
+
+        REQUIRE_NOTHROW(map.addPacket(packetsCEU.at(0)));
+        auto res2 = map.getAvailableStreams();
+        REQUIRE(res2.size() == 2);
+
+        REQUIRE_NOTHROW(map.addPacket(packetsHVU.at(0)));
+        auto res3 = map.getAvailableStreams();
+        REQUIRE(res3.size() == 3);
+        for (const auto &id : identifiers)
+        {
+            bool foundIt{false};
+            for (const auto &otherID : res3)
+            {
+                if (Utilities::toString(id) == Utilities::toString(otherID))
+                {
+                    foundIt = true;
+                    break;
+                }
+            }
+            REQUIRE(foundIt);
+        }
+
+        for (int i = 1; i < static_cast<int> (packetsICU.size()); ++i)
+        {
+            map.addPacket(packetsICU.at(i));
+        }
+        REQUIRE(map.getAvailableStreams().size() == 3);
+
+        // Run it backwards to screw with insertion
+        for (auto i = static_cast<int> (packetsCEU.size()); i >= 1; --i)
+        {
+            map.addPacket(packetsCEU.at(i));
+        }
+
+        // And duplicate the first one
+        for (const auto &packet : packetsHVU)
+        {
+            map.addPacket(packet);
+        }
+
+        // Now get them all
+        {
+        auto startTime
+            = Utilities::getStartTime<std::chrono::nanoseconds>
+              (packetsICU.front());
+        auto endTime
+            = Utilities::getEndTime<std::chrono::nanoseconds>
+              (packetsICU.back());
+        auto recovered
+            = map.getPackets(Utilities::convert(identifierICU),
+                             std::pair {startTime, endTime});
+        REQUIRE(packetsMatch(packetsICU, recovered) == true);
+        } 
+    }
+    
 }

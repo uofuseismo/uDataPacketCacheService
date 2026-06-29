@@ -62,7 +62,9 @@ public:
             throw std::runtime_error("Failed to add stream deque for "
                                    + streamIdentifier);
         }
-        SPDLOG_LOGGER_INFO(mLogger, "Added {} to deque map", streamIdentifier);
+        SPDLOG_LOGGER_INFO(mLogger,
+                           "Added {} to deque map",
+                           streamIdentifier);
     }
 
     void removeExpiredPackets()
@@ -75,7 +77,22 @@ public:
         }
     }
 
-    [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> getStreams() const
+    [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::Packet>
+         getPackets(const UDataPacketCacheServiceAPI::V1::StreamIdentifier &identifier,
+                    const std::pair<std::chrono::nanoseconds,
+                                    std::chrono::nanoseconds> &startAndEndTime) const
+    {
+        auto streamIdentifier = Utilities::toString(identifier);
+        std::vector<UDataPacketCacheServiceAPI::V1::Packet> result;
+        auto idx = mStreamDequeMap.find(streamIdentifier);
+        if (idx != mStreamDequeMap.end())
+        {
+            result = idx->second->getPackets(startAndEndTime);
+        }
+        return result; 
+    }
+
+    [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> getAvailableStreams() const
     {
         std::vector<std::string> streamNames;
         streamNames.reserve(mStreamDequeMap.size());
@@ -137,6 +154,43 @@ void StreamDequeMap::removeExpiredPackets()
 {
     pImpl->removeExpiredPackets();
 }
+
+std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> 
+    StreamDequeMap::getAvailableStreams() const
+{
+    return pImpl->getAvailableStreams();
+}
+
+/// Get the packets
+std::vector<UDataPacketCacheServiceAPI::V1::Packet>
+StreamDequeMap::getPackets(
+    const UDataPacketCacheServiceAPI::V1::StreamIdentifier &identifier,
+    const std::pair<std::chrono::nanoseconds,
+                    std::chrono::nanoseconds> &startAndEndTime) const
+{
+    if (!identifier.has_network())
+    {
+        throw std::invalid_argument("Network not set");
+    }
+    if (!identifier.has_station())
+    {
+        throw std::invalid_argument("Station not set");
+    }
+    if (!identifier.has_channel())
+    {
+        throw std::invalid_argument("Channel not set");
+    }
+    if (!identifier.has_location_code())
+    {
+        throw std::invalid_argument("Location code not set");
+    } 
+    if (startAndEndTime.first > startAndEndTime.second)
+    {
+        throw std::invalid_argument("Start time is greater than end time");
+    }
+    return pImpl->getPackets(identifier, startAndEndTime);
+}
+
 
 /// Destructor
 StreamDequeMap::~StreamDequeMap() = default;

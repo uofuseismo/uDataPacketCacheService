@@ -1,10 +1,13 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <future>
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <set>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -22,6 +25,8 @@
 #include <grpcpp/support/server_callback.h>
 #include <grpcpp/support/time.h> //NOLINT
 #include <uDataPacketCacheServiceAPI/v1/service.grpc.pb.h>
+#include <uDataPacketCacheServiceAPI/v1/available_streams_request.pb.h>
+#include <uDataPacketCacheServiceAPI/v1/available_streams_response.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/data_request.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/data_response.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/time_series.pb.h>
@@ -58,25 +63,25 @@ class Service::ServiceImpl :
     public UDataPacketCacheServiceAPI::V1::DataPacketCacheService::CallbackService
 {
 public:
+    // Available streams - more of a debugging tool than anything useful
     grpc::ServerUnaryReactor
-       *GetTimeSeries(grpc::CallbackServerContext *context,
-                      const UDataPacketCacheServiceAPI::V1::DataRequest *request,
-                      UDataPacketCacheServiceAPI::V1::DataResponse *response) override
-    {
+       *GetAvailableStreams(
+            grpc::CallbackServerContext *context,
+            const UDataPacketCacheServiceAPI::V1::AvailableStreamsRequest *request,
+            UDataPacketCacheServiceAPI::V1::AvailableStreamsResponse *response) override
+    {        
         class Reactor : public grpc::ServerUnaryReactor
         {
         public:
             Reactor(grpc::CallbackServerContext *context,
-                    const UDataPacketCacheServiceAPI::V1::DataRequest &request,
-                    UDataPacketCacheServiceAPI::V1::DataResponse *response,
+                    const UDataPacketCacheServiceAPI::V1::AvailableStreamsRequest &request,
+                    UDataPacketCacheServiceAPI::V1::AvailableStreamsResponse *response,
                     const bool isSecured,
                     const GRPCServerOptions &grpcOptions,
                     StreamDequeMap &streamDequeMap,
                     std::shared_ptr<spdlog::logger> logger) :
                 mLogger(std::move(logger))
             {
-                auto startTime
-                    = Utilities::getNow<std::chrono::nanoseconds> ();
                 // Validate the client?
                 if (isSecured)
                 {
@@ -94,7 +99,7 @@ public:
                         }
                     }
                 }
-                // Validate the request
+                // Copy the request identifier
                 std::string requestIdentifier{context->peer()};
                 if (request.has_identifier())
                 {
@@ -105,10 +110,134 @@ public:
                     *response->mutable_identifier() = request.identifier();
                 }
                 SPDLOG_LOGGER_INFO(mLogger,
-                                   "Processing waveforms request for {}",
+                                   "Getting available streams for {}",
                                    requestIdentifier);
-
+                // Do it
+                try
+                {
+                    auto streams = streamDequeMap.getAvailableStreams();
+                    for (auto &stream : streams)
+                    {
+                        response->mutable_stream_identifiers()->Add(
+                            std::move(stream));
+                    }
+                }
+                catch (const std::invalid_argument &e)
+                {
+                    SPDLOG_LOGGER_ERROR(mLogger,
+                        "Failed to pass request because {}",
+                        std::string{e.what()});
+                    Finish({grpc::StatusCode::INTERNAL,
+                            "Incorrect implementation on server"});
+                }
+                catch (const std::exception &e)
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                                   "Failed to get available streams because {}",
+                                    std::string{e.what()});
+                    Finish({grpc::StatusCode::INTERNAL,
+                            "Server error - try using a different endpoint"});
+                }
+                mSuccess = true;
+                Finish(grpc::Status::OK);
+            }
+        private:
+            void OnDone() override
+            {
+#ifndef NDEBUG
+                if (mLogger)
+                {
+                    SPDLOG_LOGGER_DEBUG(mLogger,
+                                        "GetAvailableStreams RPC completed");
+                }
+#endif
+                if (mSuccess)
+                {
+                    auto endTime
+                        = Utilities::getNow<std::chrono::nanoseconds> ();
+                    auto elapsedTime
+                        = static_cast<double>
+                          (endTime.count() - mRPCStartTime.count())*1.e-9;
+                }
+                delete this;
+            }
+            void OnCancel() override
+            {
+#ifndef NDEBUG
+                if (mLogger)
+                {
+                   SPDLOG_LOGGER_DEBUG(mLogger,
+                                       "GetAvailableStreams RPC canceled");
+                }
+#endif
+            }
+//private:
+            std::shared_ptr<spdlog::logger> mLogger{nullptr};
+            std::chrono::nanoseconds mRPCStartTime
+            {
+                Utilities::getNow<std::chrono::nanoseconds> ()
+            };
+            bool mSuccess{false};
+        };
+        return new Reactor(context,
+                           *request,
+                           response,
+                           mSecured,
+                           mGRPCOptions,
+                           *mStreamDequeMap,
+                           mLogger);
+    }
+    // Time series request
+    grpc::ServerUnaryReactor
+       *GetTimeSeries(grpc::CallbackServerContext *context,
+                      const UDataPacketCacheServiceAPI::V1::DataRequest *request,
+                      UDataPacketCacheServiceAPI::V1::DataResponse *response) override
+    {
+        class Reactor : public grpc::ServerUnaryReactor
+        {
+        public:
+            Reactor(grpc::CallbackServerContext *context,
+                    const UDataPacketCacheServiceAPI::V1::DataRequest &request,
+                    UDataPacketCacheServiceAPI::V1::DataResponse *response,
+                    const bool isSecured,
+                    const GRPCServerOptions &grpcOptions,
+                    StreamDequeMap &streamDequeMap,
+                    std::shared_ptr<spdlog::logger> logger) :
+                mLogger(std::move(logger))
+            {
+                // Validate the client?
+                if (isSecured)
+                {
+                    auto accessToken = grpcOptions.getAccessToken();
+                    if (accessToken)
+                    {
+                        if (!::validateClient(context, *accessToken))
+                        {
+                            SPDLOG_LOGGER_WARN(mLogger,
+                                              "Unauthorized client {} rejected",
+                                               context->peer());
+                            Finish({grpc::StatusCode::UNAUTHENTICATED,
+                                    "Invalid access token"});
+                            return;
+                        }
+                    }
+                }
+                // Copy the request identifier
+                std::string requestIdentifier{context->peer()};
+                if (request.has_identifier())
+                {
+                    requestIdentifier = requestIdentifier
+                                      + " ("
+                                      + request.identifier()
+                                      + ")";
+                    *response->mutable_identifier() = request.identifier();
+                }
+                SPDLOG_LOGGER_INFO(mLogger,
+                                   "Getting time series for {}",
+                                   requestIdentifier);
+                // Get the requests
                 const auto &streamRequests = request.stream_requests();
+                // Easy case - nothing desired, nothing returned
                 if (streamRequests.empty())
                 {
                     Finish({grpc::StatusCode::INVALID_ARGUMENT,
@@ -166,6 +295,7 @@ public:
                     UDataPacketCacheServiceAPI::V1::StreamIdentifier identifier;
                     std::pair<std::chrono::nanoseconds, 
                               std::chrono::nanoseconds> startAndEndTime;
+                    std::set<int> equivalentRequests;
                 };
 
                 // Build up the requests
@@ -214,32 +344,46 @@ public:
                     }
                     timeSeriesFromQuery.push_back(std::move(timeSeries));
                 }
-
+                mSuccess = true;
                 Finish(grpc::Status::OK);
-                auto endTime
-                    = Utilities::getNow<std::chrono::nanoseconds> ();
-                auto elapsedTime
-                    = static_cast<double> (endTime.count() - startTime.count())*1.e-9;
             }
         private:
             void OnDone() override
             {
+#ifndef NDEBUG
                 if (mLogger)
                 {
                     SPDLOG_LOGGER_DEBUG(mLogger,
                                         "GetTimeSeries RPC completed");
                 }
+#endif
+                if (mSuccess)
+                {
+                    auto endTime
+                        = Utilities::getNow<std::chrono::nanoseconds> ();
+                    auto elapsedTime
+                        = static_cast<double>
+                          (endTime.count() - mRPCStartTime.count())*1.e-9;
+                }
                 delete this;
             }
             void OnCancel() override
             {
+#ifndef NDEBUG
                 if (mLogger)
                 {
                    SPDLOG_LOGGER_DEBUG(mLogger,
                                        "GetTimeSeries RPC canceled");
                 }
+#endif
             }
+//private:
             std::shared_ptr<spdlog::logger> mLogger{nullptr};
+            std::chrono::nanoseconds mRPCStartTime
+            {
+                Utilities::getNow<std::chrono::nanoseconds> ()
+            };
+            bool mSuccess{false};
         }; 
         return new Reactor(context,
                            *request,
