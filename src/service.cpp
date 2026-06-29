@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 #ifndef NDEBUG
 #include <cassert>
 #endif
@@ -138,6 +139,21 @@ public:
                     auto dataPackets
                         = streamDequeMap.getPackets(streamIdentifier,
                                                     startAndEndTime);
+                    UDataPacketCacheServiceAPI::V1::TimeSeries timeSeries;
+                    *timeSeries.mutable_stream_identifier() = streamIdentifier;
+                    if (!dataPackets.empty())
+                    {
+                        timeSeries.mutable_packets()->Reserve(
+                            static_cast<int> (dataPackets.size()));
+                        for (auto &dataPacket : dataPackets)
+                        {
+                            timeSeries.mutable_packets()->Add(
+                               std::move(dataPacket));
+                        }
+                        //timeSeries.mutable_packets()->Assign(dataPackets.begin(), dataPackets.end());
+                        response->mutable_time_series()->Add(
+                            std::move(timeSeries));
+                    }
                     auto endTime
                         = Utilities::getNow<std::chrono::nanoseconds> ();
                     Finish(grpc::Status::OK);
@@ -166,6 +182,7 @@ public:
                         return;
                     }
                 }
+                std::vector<UDataPacketCacheServiceAPI::V1::TimeSeries> timeSeriesFromQuery;
                 for (const auto &streamRequest : streamRequests)
                 {
                     auto requestStartTime
@@ -174,6 +191,28 @@ public:
                     auto requestEndTime
                         = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
                             streamRequest.end_time());
+                    auto startAndEndTime
+                        = std::make_pair(
+                             std::chrono::nanoseconds {requestStartTime},
+                             std::chrono::nanoseconds {requestEndTime}
+                          );
+                    auto &streamIdentifier = streamRequest.stream_identifier();
+                    auto dataPackets
+                        = streamDequeMap.getPackets(streamIdentifier,
+                                                    startAndEndTime);
+                    UDataPacketCacheServiceAPI::V1::TimeSeries timeSeries;
+                    *timeSeries.mutable_stream_identifier() = streamIdentifier;
+                    if (!dataPackets.empty())
+                    {
+                        timeSeries.mutable_packets()->Reserve(
+                            static_cast<int> (dataPackets.size()));
+                        for (auto &dataPacket : dataPackets)
+                        {
+                            timeSeries.mutable_packets()->Add(
+                               std::move(dataPacket));
+                        }
+                    }
+                    timeSeriesFromQuery.push_back(std::move(timeSeries));
                 }
 
                 Finish(grpc::Status::OK);
