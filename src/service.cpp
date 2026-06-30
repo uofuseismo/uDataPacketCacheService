@@ -3,10 +3,8 @@
 #include <cstdint>
 #include <exception>
 #include <future>
-#include <iterator>
 #include <memory>
 #include <optional>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -25,6 +23,8 @@
 #include <grpcpp/support/status.h>
 #include <grpcpp/support/server_callback.h>
 #include <grpcpp/support/time.h> //NOLINT
+#include <grpcpp/impl/channel_argument_option.h>
+#include <grpc/impl/compression_types.h>
 #include <uDataPacketCacheServiceAPI/v1/service.grpc.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/available_streams_request.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/available_streams_response.pb.h>
@@ -415,22 +415,24 @@ public:
                 std::vector<UDataPacketCacheServiceAPI::V1::TimeSeries> timeSeriesFromQuery;
                 timeSeriesFromQuery.resize(streamRequests.size());
                 // N.B. this could be run in parallel
-                for (auto &request : requests)
+                for (int ir = 0;  
+                     ir < static_cast<int> (requests.size()); ++ir)
                 {
                     std::vector<UDataPacketCacheServiceAPI::V1::Packet> dataPackets;
-                    if (request.duplicateRequestIndex ==-1)
+                    if (requests[ir].duplicateRequestIndex ==-1)
                     {
                         try
                         {
                             dataPackets
-                                = streamDequeMap.getPackets(request.identifier,
-                                                       request.startAndEndTime);
+                                = streamDequeMap.getPackets(
+                                    requests[ir].identifier,
+                                    requests[ir].startAndEndTime);
                             UDataPacketCacheServiceAPI::V1::TimeSeries
                                 timeSeries;
                             *timeSeries.mutable_stream_identifier()
-                                = std::move(request.identifier);
+                                = std::move(requests[ir].identifier);
                             ::setDataPackets(dataPackets, &timeSeries);
-                            timeSeriesFromQuery[request.globalRequestIndex]
+                            timeSeriesFromQuery[requests[ir].globalRequestIndex]
                                 = std::move(timeSeries); 
                         }
                         catch (const std::exception &e)
@@ -504,6 +506,7 @@ public:
             };
             bool mSuccess{false};
         }; 
+        context->set_compression_algorithm(GRPC_COMPRESS_DEFLATE);
         return new Reactor(context,
                            *request,
                            response,
@@ -520,7 +523,28 @@ public:
         mGRPCOptions = mOptions.getGRPCOptions();
         const auto address = mGRPCOptions.getHost() + ":"
                            + std::to_string(mGRPCOptions.getPort());
-        grpc::ServerBuilder builder;
+        // Connections are closed after this amount of time.
+        constexpr std::chrono::milliseconds
+              maxConnectionAge{std::chrono::seconds {30}};
+        // After connection reaches max age - this is how long we wait for
+        // outstanding RPCs to complete
+        constexpr std::chrono::milliseconds
+             maxConnectionGrace{std::chrono::seconds {10}};
+        // Maximum number of incoming streams to allow on an http2 connection
+        constexpr int maxConcurrentStreams{64};
+        auto &builder = grpc::ServerBuilder {}
+           .SetOption(grpc::MakeChannelArgumentOption(
+                            "GRPC_ARG_MAX_CONNECTION_AGE_MS",
+                             static_cast<int> (maxConnectionAge.count())))
+           .SetOption(grpc::MakeChannelArgumentOption(
+                            "GRPC_ARG_MAX_CONNECTION_AGE_GRACE_MS",
+                             static_cast<int> (maxConnectionGrace.count())))
+           .SetOption(grpc::MakeChannelArgumentOption(
+                            "GRPC_ARG_MAX_CONCURRENT_STREAMS",
+                             maxConcurrentStreams));
+        builder.SetMaxSendMessageSize(
+            mOptions.getMaximumRequestMessageSizeInBytes());
+
         if (mGRPCOptions.getServerKey() == std::nullopt ||
             mGRPCOptions.getServerCertificate() == std::nullopt)
         {        
