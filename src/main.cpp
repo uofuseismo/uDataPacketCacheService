@@ -67,6 +67,11 @@ StreamDequeMapOptions dmopt;
                 mAddPacketCallback,
                 mLogger);
 
+        mService
+            = std::make_unique<Service> (
+                mOptions.serviceOptions,
+                mStreamDequeMap,
+                mLogger);
     }
 
     /// @brief Destructor

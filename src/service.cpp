@@ -17,6 +17,7 @@
 #endif
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
@@ -57,19 +58,112 @@ bool validateClient(const grpc::CallbackServerContext *context,
     return false;
 }
 
+struct Request
+{
+    explicit Request(const UDataPacketCacheServiceAPI::V1::StreamRequest &request)
+    {
+        identifier = request.stream_identifier();
+        auto requestStartTime
+            = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
+                request.start_time());
+        auto requestEndTime
+            = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
+                request.end_time());
+        startAndEndTime
+            = std::make_pair(
+                 std::chrono::nanoseconds {requestStartTime},
+                 std::chrono::nanoseconds {requestEndTime}
+             );
+        identifierString = Utilities::toString(identifier);
+        duplicateRequestIndex =-1;
+        globalRequestIndex =-1;
+    }
+    UDataPacketCacheServiceAPI::V1::StreamIdentifier identifier;
+    std::pair<std::chrono::nanoseconds, 
+              std::chrono::nanoseconds> startAndEndTime;
+    std::string identifierString;
+    int duplicateRequestIndex{-1};
+    int globalRequestIndex{-1};
+};
+
+void setDataPackets(
+     std::vector<UDataPacketCacheServiceAPI::V1::Packet> &dataPackets,
+     UDataPacketCacheServiceAPI::V1::TimeSeries *timeSeries)
+{
+     if (!dataPackets.empty())
+     {
+         timeSeries->mutable_packets()->Reserve(
+             static_cast<int> (dataPackets.size()));
+         for (auto &dataPacket : dataPackets)
+         {
+             timeSeries->mutable_packets()->Add(std::move(dataPacket));
+         }
+     }
+     else
+     {
+         timeSeries->Clear();
+     }
+}
+
+
+bool operator==(const Request &lhs, const Request &rhs)
+{
+     // No point trying to match to an un-matched request
+     if (lhs.duplicateRequestIndex ==-1 &&
+         rhs.duplicateRequestIndex ==-1)
+     {
+         return false;
+     }         
+     if (lhs.startAndEndTime.first != rhs.startAndEndTime.first)
+     {
+         return false;
+     }
+     if (lhs.startAndEndTime.second != rhs.startAndEndTime.second)
+     {
+         return false;
+     }
+     if (lhs.identifierString != rhs.identifierString)
+     {
+         return false;
+     }
+     return true;
+}
+
 }
 
 class Service::ServiceImpl : 
     public UDataPacketCacheServiceAPI::V1::DataPacketCacheService::CallbackService
 {
 public:
+    // Constructor
+    ServiceImpl(const ServiceOptions &options,
+                std::shared_ptr<StreamDequeMap> streamDequeMap,
+                std::shared_ptr<spdlog::logger> logger) :
+        mOptions(options),
+        mStreamDequeMap(std::move(streamDequeMap)),
+        mLogger(std::move(logger))
+    {
+        if (mStreamDequeMap == nullptr)
+        {
+            throw std::invalid_argument("Stream deque map is null");
+        }
+        if (mLogger == nullptr)
+        {
+            // NOLINTBEGIN(misc-include-cleaner)
+            auto classId
+                = std::to_string (reinterpret_cast<std::uintptr_t> (this));
+            mLogger = spdlog::stdout_color_mt("ServiceConsole-" + classId);
+            // NOLINTEND(misc-include-cleaner)
+        }
+    }
+
     // Available streams - more of a debugging tool than anything useful
     grpc::ServerUnaryReactor
        *GetAvailableStreams(
             grpc::CallbackServerContext *context,
             const UDataPacketCacheServiceAPI::V1::AvailableStreamsRequest *request,
             UDataPacketCacheServiceAPI::V1::AvailableStreamsResponse *response) override
-    {        
+    {
         class Reactor : public grpc::ServerUnaryReactor
         {
         public:
@@ -82,6 +176,7 @@ public:
                     std::shared_ptr<spdlog::logger> logger) :
                 mLogger(std::move(logger))
             {
+                auto &metrics = MetricsSingleton::getInstance();
                 // Validate the client?
                 if (isSecured)
                 {
@@ -93,6 +188,7 @@ public:
                             SPDLOG_LOGGER_WARN(mLogger,
                                               "Unauthorized client {} rejected",
                                                context->peer());
+                            metrics.incrementInvalidAccessCounter();
                             Finish({grpc::StatusCode::UNAUTHENTICATED,
                                     "Invalid access token"});
                             return;
@@ -109,9 +205,11 @@ public:
                                       + ")";
                     *response->mutable_identifier() = request.identifier();
                 }
-                SPDLOG_LOGGER_INFO(mLogger,
-                                   "Getting available streams for {}",
-                                   requestIdentifier);
+#ifndef NDEBUG
+                SPDLOG_LOGGER_DEBUG(mLogger,
+                                    "Getting available streams for {}",
+                                    requestIdentifier);
+#endif
                 // Do it
                 try
                 {
@@ -122,21 +220,15 @@ public:
                             std::move(stream));
                     }
                 }
-                catch (const std::invalid_argument &e)
-                {
-                    SPDLOG_LOGGER_ERROR(mLogger,
-                        "Failed to pass request because {}",
-                        std::string{e.what()});
-                    Finish({grpc::StatusCode::INTERNAL,
-                            "Incorrect implementation on server"});
-                }
                 catch (const std::exception &e)
                 {
+                    metrics.incrementServerErrorCounter();
                     SPDLOG_LOGGER_WARN(mLogger,
                                    "Failed to get available streams because {}",
                                     std::string{e.what()});
                     Finish({grpc::StatusCode::INTERNAL,
                             "Server error - try using a different endpoint"});
+                    return;
                 }
                 mSuccess = true;
                 Finish(grpc::Status::OK);
@@ -205,6 +297,7 @@ public:
                     std::shared_ptr<spdlog::logger> logger) :
                 mLogger(std::move(logger))
             {
+                auto &metrics = MetricsSingleton::getInstance();
                 // Validate the client?
                 if (isSecured)
                 {
@@ -216,6 +309,7 @@ public:
                             SPDLOG_LOGGER_WARN(mLogger,
                                               "Unauthorized client {} rejected",
                                                context->peer());
+                            metrics.incrementInvalidAccessCounter();
                             Finish({grpc::StatusCode::UNAUTHENTICATED,
                                     "Invalid access token"});
                             return;
@@ -240,6 +334,7 @@ public:
                 // Easy case - nothing desired, nothing returned
                 if (streamRequests.empty())
                 {
+                    metrics.incrementInvalidRequestCounter();
                     Finish({grpc::StatusCode::INVALID_ARGUMENT,
                             "No streams specified in request"});
                     return;
@@ -250,99 +345,123 @@ public:
                     std::string reason;
                     if (!Utilities::isValid(streamRequests[0], reason))
                     {
+                        metrics.incrementInvalidRequestCounter();
                         Finish({grpc::StatusCode::INVALID_ARGUMENT, reason});
                         return;
                     }
-                    auto &streamIdentifier = streamRequests[0].stream_identifier();
-                    auto requestStartTime
-                        = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
-                            streamRequests[0].start_time());
-                    auto requestEndTime
-                        = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
-                            streamRequests[0].end_time());
-                    auto startAndEndTime
-                        = std::make_pair(
-                             std::chrono::nanoseconds {requestStartTime},
-                             std::chrono::nanoseconds {requestEndTime}
-                          );
-                    auto dataPackets
-                        = streamDequeMap.getPackets(streamIdentifier,
-                                                    startAndEndTime);
-                    UDataPacketCacheServiceAPI::V1::TimeSeries timeSeries;
-                    *timeSeries.mutable_stream_identifier() = streamIdentifier;
-                    if (!dataPackets.empty())
+                    ::Request request{streamRequests[0]};
+                    try
                     {
-                        timeSeries.mutable_packets()->Reserve(
-                            static_cast<int> (dataPackets.size()));
-                        for (auto &dataPacket : dataPackets)
-                        {
-                            timeSeries.mutable_packets()->Add(
-                               std::move(dataPacket));
-                        }
+                        auto dataPackets
+                            = streamDequeMap.getPackets(request.identifier,
+                                                        request.startAndEndTime);
+                        UDataPacketCacheServiceAPI::V1::TimeSeries timeSeries;
+                        *timeSeries.mutable_stream_identifier()
+                            = std::move(request.identifier);
+                        ::setDataPackets(dataPackets, &timeSeries);
                         //timeSeries.mutable_packets()->Assign(dataPackets.begin(), dataPackets.end());
                         response->mutable_time_series()->Add(
                             std::move(timeSeries));
                     }
+                    catch (const std::exception &e)
+                    {
+                        SPDLOG_LOGGER_ERROR(mLogger,
+                                            "Failed to get packets because {}",
+                                            std::string {e.what()});
+                        Finish({grpc::StatusCode::INTERNAL,
+                            "Server error - try using a different endpoint"});
+                        metrics.incrementServerErrorCounter();
+                        return;
+                    } 
                     auto endTime
                         = Utilities::getNow<std::chrono::nanoseconds> ();
+                    metrics.incrementSuccessfulRPCCounter();
                     Finish(grpc::Status::OK);
                     return;
                 }
 
                 // This is a bear - we have to validate requests and deduplicate
-                struct Request
-                {
-                    UDataPacketCacheServiceAPI::V1::StreamIdentifier identifier;
-                    std::pair<std::chrono::nanoseconds, 
-                              std::chrono::nanoseconds> startAndEndTime;
-                    std::set<int> equivalentRequests;
-                };
+                std::vector<::Request> requests;
+                requests.reserve(streamRequests.size());
 
-                // Build up the requests
-                int requestNumber{0};
-                for (const auto &streamRequest : streamRequests)
+                // Build up the requests (noting the duplicates)
+                bool hasDuplicates{false};
+                for (int ir = 0; 
+                     ir < static_cast<int> (streamRequests.size()); ++ir)
                 {
-                    requestNumber = requestNumber + 1;
                     std::string reason;
-                    if (!Utilities::isValid(streamRequest, reason))
+                    if (!Utilities::isValid(streamRequests[ir], reason))
                     {
                         reason.append(" for stream request ");
-                        reason.append(std::to_string(requestNumber));
+                        reason.append(std::to_string(ir));
                         Finish({grpc::StatusCode::INVALID_ARGUMENT, reason});
+                        metrics.incrementInvalidRequestCounter();
                         return;
+                    }
+                    // See if this matches a previous request
+                    Request request{streamRequests[ir]};
+                    for (int jr = 0;
+                         jr < static_cast<int> (requests.size()); ++jr)
+                    {
+                        if (request == requests[jr])
+                        {
+                            hasDuplicates = true;
+                            request.duplicateRequestIndex = jr;
+                            request.globalRequestIndex = ir;
+                            break;
+                        }
                     }
                 }
                 std::vector<UDataPacketCacheServiceAPI::V1::TimeSeries> timeSeriesFromQuery;
-                for (const auto &streamRequest : streamRequests)
+                timeSeriesFromQuery.resize(streamRequests.size());
+                // N.B. this could be run in parallel
+                for (auto &request : requests)
                 {
-                    auto requestStartTime
-                        = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
-                            streamRequest.start_time());
-                    auto requestEndTime
-                        = google::protobuf::util::TimeUtil::TimestampToNanoseconds(
-                            streamRequest.end_time());
-                    auto startAndEndTime
-                        = std::make_pair(
-                             std::chrono::nanoseconds {requestStartTime},
-                             std::chrono::nanoseconds {requestEndTime}
-                          );
-                    auto &streamIdentifier = streamRequest.stream_identifier();
-                    auto dataPackets
-                        = streamDequeMap.getPackets(streamIdentifier,
-                                                    startAndEndTime);
-                    UDataPacketCacheServiceAPI::V1::TimeSeries timeSeries;
-                    *timeSeries.mutable_stream_identifier() = streamIdentifier;
-                    if (!dataPackets.empty())
+                    std::vector<UDataPacketCacheServiceAPI::V1::Packet> dataPackets;
+                    if (request.duplicateRequestIndex ==-1)
                     {
-                        timeSeries.mutable_packets()->Reserve(
-                            static_cast<int> (dataPackets.size()));
-                        for (auto &dataPacket : dataPackets)
+                        try
                         {
-                            timeSeries.mutable_packets()->Add(
-                               std::move(dataPacket));
+                            dataPackets
+                                = streamDequeMap.getPackets(request.identifier,
+                                                       request.startAndEndTime);
+                            UDataPacketCacheServiceAPI::V1::TimeSeries
+                                timeSeries;
+                            *timeSeries.mutable_stream_identifier()
+                                = std::move(request.identifier);
+                            ::setDataPackets(dataPackets, &timeSeries);
+                            timeSeriesFromQuery[request.globalRequestIndex]
+                                = std::move(timeSeries); 
+                        }
+                        catch (const std::exception &e)
+                        {
+                            SPDLOG_LOGGER_ERROR(mLogger,
+                                            "Failed to get packets because {}",
+                                            std::string {e.what()});
+                            Finish({grpc::StatusCode::INTERNAL,
+                            "Server error - try using a different endpoint"});
+                            metrics.incrementServerErrorCounter();
+                            return;
                         }
                     }
-                    timeSeriesFromQuery.push_back(std::move(timeSeries));
+                }
+                // Copy the duplicate requests 
+                if (hasDuplicates)
+                {
+                    for (const auto &request : requests)
+                    {
+                        if (request.duplicateRequestIndex !=-1)
+                        {
+                            timeSeriesFromQuery[request.duplicateRequestIndex]
+                            = timeSeriesFromQuery[request.globalRequestIndex];
+                        }
+                    } 
+                }
+                // And finally set the time series on the responses
+                for (auto &timeSeries : timeSeriesFromQuery)
+                {
+                    response->mutable_time_series()->Add(
+                        std::move(timeSeries));
                 }
                 mSuccess = true;
                 Finish(grpc::Status::OK);
@@ -475,6 +594,8 @@ public:
         std::this_thread::sleep_for(std::chrono::milliseconds{25});
     }
  
+    ServiceImpl() = delete;
+//private: 
     ServiceOptions mOptions; 
     std::shared_ptr<StreamDequeMap> mStreamDequeMap{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
@@ -484,6 +605,16 @@ public:
     bool mSecured{false};
     bool mStarted{false};
 };
+
+/// Constructor
+Service::Service(const ServiceOptions &options,
+                 std::shared_ptr<StreamDequeMap> streamDequeMap,
+                 std::shared_ptr<spdlog::logger> logger) :
+    pImpl(std::make_unique<ServiceImpl> (options,
+                                         std::move(streamDequeMap),
+                                         std::move(logger)))
+{
+}
 
 /// Start the service
 std::future<void> Service::start()

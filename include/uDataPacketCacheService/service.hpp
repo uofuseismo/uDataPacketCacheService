@@ -18,8 +18,8 @@ class Service
 {
 public:
     /// @brief Creates the service.
-    Service(std::shared_ptr<StreamDequeMap> streamDequeMap,
-            const ServiceOptions &options,
+    Service(const ServiceOptions &options,
+            std::shared_ptr<StreamDequeMap> streamDequeMap,
             std::shared_ptr<spdlog::logger> logger);  
 
     /// @brief Runs the service on a separate thread.
