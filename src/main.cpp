@@ -21,6 +21,8 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <opentelemetry/metrics/provider.h>
+//#include <opentelemetry/metrics/meter.h>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include "uDataPacketCacheService/streamDequeMap.hpp"
@@ -58,8 +60,9 @@ public:
         mMaximumImportQueueSize = mOptions.maximumImportQueueSize;
         mImportQueue.set_capacity(mMaximumImportQueueSize);
 
-StreamDequeMapOptions dmopt;
-        mStreamDequeMap = std::make_unique<StreamDequeMap> (dmopt, mLogger);
+        mStreamDequeMap
+            = std::make_unique<StreamDequeMap>
+              (mOptions.streamDequeMapOptions, mLogger);
  
         mDataPacketSubscriber
             = std::make_unique<Subscriber> (
@@ -72,6 +75,82 @@ StreamDequeMapOptions dmopt;
                 mOptions.serviceOptions,
                 mStreamDequeMap,
                 mLogger);
+
+        // Metrics
+        if (mOptions.exportMetrics)
+        {
+            // Need a provider from which to get a meter.  This is initialized
+            // once and should last the duration of the application.
+            auto provider
+                = opentelemetry::metrics::Provider::GetMeterProvider();
+
+            // Meter will be bound to application (library, module, class, etc.)
+            // so as to identify who is genreating these metrics.
+            auto meter = provider->GetMeter(mOptions.applicationName, "1.2.0");
+
+            // Packets received
+            receivedPacketsCounter
+                = meter->CreateInt64ObservableCounter(
+                  "seismic_data.waveform_storage.packet_cache.client.packets.received.",
+                  "Number of seismic data packets received by the import client",
+                  "{packets}");
+            receivedPacketsCounter->AddCallback(
+                UDataPacketCacheService::Metrics::observeNumberOfPacketsReceived,
+                nullptr);
+
+            invalidPacketsCounter
+                = meter->CreateInt64ObservableCounter(
+                  "seismic_data.waveform_storage.packet_cache.client.packets.invalid",
+                  "Number of seismic data packets received by the import client that were invalid or malformed",
+                  "{packets}");
+            receivedPacketsCounter->AddCallback(
+                UDataPacketCacheService::Metrics::observeNumberOfInvalidPacketsReceived,
+                nullptr);
+
+            importOverflowPacketsCounter
+                = meter->CreateInt64ObservableCounter(
+                  "seismic_data.waveform_storage.packet_cache.client.packets.overflow",
+                  "Number of seismic data packets that were skipped because of an internal buffer overflow",
+                  "{packets}");
+            importOverflowPacketsCounter->AddCallback(
+                UDataPacketCacheService::Metrics::observeNumberOfOverflowPackets,
+                nullptr);
+
+            invalidAccessCounter
+                = meter->CreateInt64ObservableCounter(
+                  "seismic_data.waveform_storage.packet_cache.service.access_denied",
+                  "Number of times clients have been denied access to an RPC - these are 300 errors");
+            invalidAccessCounter->AddCallback(
+                UDataPacketCacheService::Metrics::observeNumberOfInvalidAccesses,
+                nullptr);
+
+            invalidRequestCounter
+                = meter->CreateInt64ObservableCounter(
+                  "seismic_data.waveform_storage.packet_cache.service.invalid_request",
+                  "Number of times clients have submitted invalid queries to an RPC - these are 400 errors");
+            invalidRequestCounter->AddCallback(
+                UDataPacketCacheService::Metrics::observeNumberOfInvalidRequests,
+                nullptr);
+
+            serverErrorCounter
+                = meter->CreateInt64ObservableCounter(
+                  "seismic_data.waveform_storage.packet_cache.service.server_error",
+                  "Number of times an internal error was detected in an RPC - these are 500 errors");
+
+            serverErrorCounter->AddCallback(
+                UDataPacketCacheService::Metrics::observeNumberOfServerErrors,
+                nullptr);
+
+            successfulRPCCounter
+                = meter->CreateInt64ObservableCounter(
+                  "seismic_data.waveform_storage.packet_cache.service.success",
+                  "Number of times an RPC was successfully called - these are 200 response codes");
+            successfulRPCCounter->AddCallback(
+                UDataPacketCacheService::Metrics::observeNumberOfSuccesses,
+                nullptr);
+
+
+        }
     }
 
     /// @brief Destructor
@@ -98,6 +177,8 @@ StreamDequeMapOptions dmopt;
 
         // Finally, open this for business
         // TODO add service
+        auto serviceFuture = mService->start();
+        mFuturesMap.insert_or_assign("gRPCService", std::move(serviceFuture));
 
         mIsRunning = true;
         handleMainThread();
@@ -112,7 +193,6 @@ StreamDequeMapOptions dmopt;
 
         if (mIsRunning)
         {
-            mKeepRunning.store(false);
             mIsRunning = false;
             // Stop the import first
             if (mDataPacketSubscriber != nullptr)
@@ -120,7 +200,10 @@ StreamDequeMapOptions dmopt;
                 mDataPacketSubscriber->stop();
             }
             std::this_thread::sleep_for(std::chrono::milliseconds {15});
-            // Now boot the subscribers
+            // Stop the propagation thread
+            mKeepRunning.store(false);
+            std::this_thread::sleep_for(std::chrono::milliseconds {15});
+            // Now boot the clients
             if (mService != nullptr)
             {
                 mService->stop();

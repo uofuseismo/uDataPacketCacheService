@@ -1,3 +1,4 @@
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -10,8 +11,12 @@ class ServiceOptions::ServiceOptionsImpl
 {
 public:
     GRPCServerOptions mGRPCOptions; 
+    std::chrono::milliseconds mMaximumConnectionAge{std::chrono::seconds {30}};
+    std::chrono::milliseconds mMaximumGracePeriod{1};
+    CompressionAlgorithm mCompressionAlgorithm{CompressionAlgorithm::Deflate};
     int mMaximumRequestQueueSize{32}; 
     int mMaximumRequestMessageSizeInBytes{1024};
+    int mMaximumConcurrentStreams{64};
     bool mHasGRPCOptions{false};
 };
 
@@ -104,3 +109,65 @@ int ServiceOptions::getMaximumRequestMessageSizeInBytes() const noexcept
     return pImpl->mMaximumRequestMessageSizeInBytes;
 }
 
+/// Maximum connection age
+void ServiceOptions::setMaximumConnectionAge(
+    const std::chrono::milliseconds &duration)
+{
+    if (duration.count() < 1)
+    {
+        throw std::invalid_argument("Max connection duration must be positive");
+    }
+    pImpl->mMaximumConnectionAge = duration;
+}
+
+std::chrono::milliseconds 
+ServiceOptions::getMaximumConnectionAge() const noexcept
+{
+    return pImpl->mMaximumConnectionAge;
+}
+
+/// Maximum grace period
+void ServiceOptions::setMaximumConnectionAgeGracePeriod(
+    const std::chrono::milliseconds &period)
+{
+    if (period.count() < 0)
+    {
+        throw std::invalid_argument("Grace period must be non-negative");
+    }
+    pImpl->mMaximumGracePeriod = period;
+}
+
+std::chrono::milliseconds
+ServiceOptions::getMaximumConnectionAgeGracePeriod() const noexcept
+{
+    return pImpl->mMaximumGracePeriod;
+}
+
+/// Maximum concurrent streams
+void ServiceOptions::setMaximumNumberOfConcurrentStreams(const int maxStreams)
+{
+    if (maxStreams < 1)
+    {
+        throw std::invalid_argument(
+           "Max number of concurrent streams must be positive");
+    }
+    pImpl->mMaximumConcurrentStreams = maxStreams;
+}
+
+int ServiceOptions::getMaximumNumberOfConcurrentStreams() const noexcept
+{
+    return pImpl->mMaximumConcurrentStreams;
+}
+
+/// Maximum number of concurrent streams
+void ServiceOptions::setCompressionAlgorithm(
+    const CompressionAlgorithm algorithm) noexcept
+{
+    pImpl->mCompressionAlgorithm = algorithm;
+}
+
+ServiceOptions::CompressionAlgorithm 
+ServiceOptions::getCompressionAlgorithm() const noexcept
+{
+    return pImpl->mCompressionAlgorithm;
+}

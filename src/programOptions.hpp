@@ -27,6 +27,7 @@ namespace
 struct ProgramOptions
 {
     UDataPacketCacheService::ServiceOptions serviceOptions;
+    UDataPacketCacheService::StreamDequeMapOptions streamDequeMapOptions;
     UDataPacketCacheService::SubscriberOptions dataPacketSubscriberOptions;
     UDataPacketCacheService::OTelOptions::HTTPMetrics otelHTTPMetricsOptions;
     UDataPacketCacheService::OTelOptions::HTTPLog otelHTTPLogOptions;
@@ -296,6 +297,64 @@ std::string getOTelCollectorURL(boost::property_tree::ptree &propertyTree,
     return options;
 }
 
+UDataPacketCacheService::ServiceOptions
+   getPublishServiceOptions(const boost::property_tree::ptree &propertyTree)
+{
+    using namespace UDataPacketCacheService;
+    ServiceOptions options;
+    auto grpcOptions
+        = ::getGRPCServerOptions(propertyTree, "Service");
+    options.setGRPCOptions(grpcOptions);
+
+    int maxConnectionAgeMilliS{
+       static_cast<int> (options.getMaximumConnectionAge().count())};
+    maxConnectionAgeMilliS = propertyTree.get<int> (
+                      "Service.maximumConnectionAgeInMilliSeconds",
+                      maxConnectionAgeMilliS);
+    options.setMaximumConnectionAge(
+        std::chrono::milliseconds(maxConnectionAgeMilliS));
+
+
+    int maxGracePeriodMilliS{
+        static_cast<int> (options.getMaximumConnectionAgeGracePeriod().count())};
+    maxGracePeriodMilliS = propertyTree.get<int> (
+                      "Service.maximumConnectionAgeGracePeriodInMilliSeconds",
+                      maxGracePeriodMilliS);
+    options.setMaximumConnectionAgeGracePeriod(
+        std::chrono::milliseconds(maxGracePeriodMilliS));
+
+    int maxConcurrentStreams
+         = propertyTree.get<int> ("Service.maximumNumberOfConcurrentStreams",
+                                options.getMaximumNumberOfConcurrentStreams());
+    options.setMaximumNumberOfConcurrentStreams(maxConcurrentStreams);
+
+    std::string compression{"deflate"};
+    compression
+        =  propertyTree.get<std::string> ("Service.compressionAlgorithm",
+                                          compression);
+    std::transform(compression.begin(), compression.end(),
+                   compression.begin(), ::tolower);
+    compression.erase(std::remove_if(compression.begin(), compression.end(), ::isspace), compression.end());
+    if (compression == "deflate")
+    {
+        options.setCompressionAlgorithm(
+           ServiceOptions::CompressionAlgorithm::Deflate); 
+    }
+    else if (compression == "gzip")
+    {
+        options.setCompressionAlgorithm(
+            ServiceOptions::CompressionAlgorithm::GZIP);
+    }
+    else
+    {
+        options.setCompressionAlgorithm(
+             ServiceOptions::CompressionAlgorithm::None);
+    }
+
+    return options;
+}
+
+
 ::ProgramOptions parseIniFile(const std::filesystem::path &iniFile)
 {
     ::ProgramOptions options;
@@ -356,6 +415,9 @@ std::string getOTelCollectorURL(boost::property_tree::ptree &propertyTree,
              maximumFutureTimeInMilliseconds);
     options.maximumPacketFutureTime
         = std::chrono::milliseconds {maximumFutureTimeInMilliseconds};
+
+    // Service options
+    options.serviceOptions = getPublishServiceOptions(propertyTree);
 
     // Logging
     options.exportLogs = false;
@@ -482,8 +544,6 @@ std::string getOTelCollectorURL(boost::property_tree::ptree &propertyTree,
             options.exportMetricsWithHTTP = false;
         }
     }
-
-    // Data packet subscriber options
 
     return options;
 }

@@ -15,6 +15,17 @@ public:
     /// @result An instance of the singleton.  This is thread-safe.
     [[maybe_unused]] static MetricsSingleton &getInstance();
 
+    /// @brief Sets the maximum number of clients.
+    void setMaximumNumberOfClients(int maxClients);
+    /// @result The maximum number of clients.
+    [[nodiscard]] int getMaximumNumberOfClients() const noexcept;
+    /// @brief Indicates that there is a new client.
+    void incrementNumberOfClients() noexcept;
+    /// @brief Indicates that a client is leaving.
+    void decrementNumberOfClients() noexcept;
+    /// @brief Gets the number of clients.
+    [[nodiscard]] int getNumberOfClients() const noexcept;
+
     /// @brief Increments the number of packets received counter.
     void incrementPacketsReceivedCounter() noexcept;
     /// @result The number of packets received.
@@ -42,7 +53,7 @@ public:
     /// @brief Increments the number of invalid requests.
     void incrementInvalidRequestCounter();
     /// @result The number of invalid requests.
-    [[nodiscard]] int64_t getInvalidRequestsCount() const noexcept;
+    [[nodiscard]] int64_t getInvalidRequestCount() const noexcept;
 
     /// @brief Increments the number of server side errors.
     void incrementServerErrorCounter() noexcept;
@@ -52,13 +63,17 @@ public:
     /// @brief Increments the number of successful RPCs.
     void incrementSuccessfulRPCCounter() noexcept;
     /// @result The number of successful RPCs.
-    [[nodiscard]] int64_t getSuccessfulRCPCount() const noexcept;
+    [[nodiscard]] int64_t getSuccessfulRPCCount() const noexcept;
+
+    /// @result The current utilization.
+    [[nodiscard]] double getServiceUtilization() const noexcept;
 
     /// @brief Resets the counters and clears maps.  This is useful for unit tests.
     void resetCounters();
 private:
     MetricsSingleton() = default;
     ~MetricsSingleton() = default;
+    std::atomic<double> mServiceUtilization{0};
     std::atomic<int64_t> mPacketsReceivedCounter{0};
     std::atomic<int64_t> mInvalidPacketsReceivedCounter{0};
     std::atomic<int64_t> mImportOverflowPacketCounter{0};
@@ -66,6 +81,8 @@ private:
     std::atomic<int64_t> mInvalidAccessCounter{0};
     std::atomic<int64_t> mInvalidRequestsCounter{0};
     std::atomic<int64_t> mServerErrorCounter{0};
+    std::atomic<int> mNumberOfClients{0};
+    int mMaximumNumberOfClients{64};
 };
 /// @brief Convenience function to instantiate the metrics singleton once at the
 ///        beginning of the main program.

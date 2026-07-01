@@ -25,6 +25,21 @@ namespace
 
 bool metricsInitialized{false};
 
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+    receivedPacketsCounter;
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+    invalidPacketsCounter;
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+    importOverflowPacketsCounter;
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+    invalidAccessCounter;
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+    invalidRequestCounter;
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+    serverErrorCounter;
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+    successfulRPCCounter;
+
 void initializeHTTP(
     const bool exportMetrics,
     // NOLINTNEXTLINE(misc-include-cleaner)
@@ -148,6 +163,182 @@ void cleanup()
     }
     metricsInitialized = false;
 }
+
+void observeNumberOfPacketsReceived(
+    opentelemetry::metrics::ObserverResult observerResult,
+    void *)
+{
+    if (opentelemetry::nostd::holds_alternative
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+                opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult))
+    {   
+        auto observer = opentelemetry::nostd::get
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+               opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult);
+        auto &instance = MetricsSingleton::getInstance();
+        auto value = instance.getPacketsReceivedCount();
+        observer->Observe(value);
+    }   
+}
+
+void observeNumberOfInvalidPacketsReceived(
+    opentelemetry::metrics::ObserverResult observerResult,
+    void *)
+{
+    if (opentelemetry::nostd::holds_alternative
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+                opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult))
+    {   
+        auto observer = opentelemetry::nostd::get
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+               opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult);
+        auto &instance = MetricsSingleton::getInstance();
+        auto value = instance.getInvalidPacketsReceivedCount();
+        observer->Observe(value);
+    }
+}
+
+void observeNumberOfOverflowPackets(
+    opentelemetry::metrics::ObserverResult observerResult,
+    void *)
+{
+    if (opentelemetry::nostd::holds_alternative
+        <   
+            opentelemetry::nostd::shared_ptr
+            <   
+                opentelemetry::metrics::ObserverResultT<int64_t>
+            >   
+        > (observerResult))
+    {   
+        auto observer = opentelemetry::nostd::get
+        <   
+            opentelemetry::nostd::shared_ptr
+            <   
+               opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult);
+        auto &instance = MetricsSingleton::getInstance();
+        auto value = instance.getImportOverflowPacketCount();
+        observer->Observe(value);
+    }   
+}
+
+void observeNumberOfInvalidAccesses(
+    opentelemetry::metrics::ObserverResult observerResult,
+    void *)
+{
+    if (opentelemetry::nostd::holds_alternative
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+                opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult))
+    {   
+        auto observer = opentelemetry::nostd::get
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+               opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult);
+        auto &instance = MetricsSingleton::getInstance();
+        auto value = instance.getInvalidAccessCount();
+        observer->Observe(value);
+    }
+}
+
+void observeNumberOfInvalidRequests(
+    opentelemetry::metrics::ObserverResult observerResult,
+    void *)
+{
+    if (opentelemetry::nostd::holds_alternative
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+                opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult))
+    {   
+        auto observer = opentelemetry::nostd::get
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+               opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult);
+        auto &instance = MetricsSingleton::getInstance();
+        auto value = instance.getInvalidRequestCount();
+        observer->Observe(value);
+    }
+}
+
+void observeNumberOfServerErrors(
+    opentelemetry::metrics::ObserverResult observerResult,
+    void *)
+{
+    if (opentelemetry::nostd::holds_alternative
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+                opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult))
+    {   
+        auto observer = opentelemetry::nostd::get
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+               opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult);
+        auto &instance = MetricsSingleton::getInstance();
+        auto value = instance.getServerErrorCount();
+        observer->Observe(value);
+    }   
+}
+
+void observeNumberOfSuccesses(
+    opentelemetry::metrics::ObserverResult observerResult,
+    void *)
+{
+    if (opentelemetry::nostd::holds_alternative
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+                opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult))
+    {   
+        auto observer = opentelemetry::nostd::get
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+               opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult);
+        auto &instance = MetricsSingleton::getInstance();
+        auto value = instance.getSuccessfulRPCCount();
+        observer->Observe(value);
+    }   
+}
+
 
 }
 

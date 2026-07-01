@@ -16,6 +16,13 @@ namespace UDataPacketCacheService
 class ServiceOptions
 {
 public:
+    enum class CompressionAlgorithm
+    {
+        None,
+        Deflate,
+        GZIP
+    };
+public:
     /// @brief Constructor.
     ServiceOptions();
     /// @brief Copy constructor.
@@ -39,6 +46,12 @@ public:
     /// @note By default this is 32.
     [[nodiscard]] int getMaximumRequestQueueSize() const noexcept;
 
+    /// @brief Sets the compression algorithm for the RPC that
+    ///        serves time series data.
+    void setCompressionAlgorithm(CompressionAlgorithm algorithm) noexcept;
+    /// @result The compression algorithm for the time series serving RPC.
+    [[nodiscard]] CompressionAlgorithm getCompressionAlgorithm() const noexcept;
+
     /// @brief Sets the maximum request message size (in bytes).
     /// @param[in] maximumMessageSize   The maximum message size in bytes.
     /// @throws std::invalid_argument if this is not positive.
@@ -47,6 +60,24 @@ public:
     /// @note By default this is 1024. 
     [[nodiscard]] int getMaximumRequestMessageSizeInBytes() const noexcept;
  
+    /// @brief Sets the maximum connection age.  After this amount of time
+    ///        the connection is terminated.
+    void setMaximumConnectionAge(const std::chrono::milliseconds &maxConnectionAge);
+    /// @result The maximum connection age.
+    [[nodiscard]] std::chrono::milliseconds getMaximumConnectionAge() const noexcept;
+
+    /// @brief After the maximum connection age is hit, this is the amount of
+    ///        of time to wait for the RPC to finish.
+    void setMaximumConnectionAgeGracePeriod(const std::chrono::milliseconds &maxGracePeriod);
+    /// @result The maximum grace period for RPCs belonging to connections
+    ///         that look stale.
+    [[nodiscard]] std::chrono::milliseconds getMaximumConnectionAgeGracePeriod() const noexcept;
+
+    /// @brief Sets the maximum number of concurrent connection after which 
+    ///        point the service is over-saturated.
+    void setMaximumNumberOfConcurrentStreams(const int maxStreams);
+    /// @result The maximum number of concurrent connections.
+    [[nodiscard]] int getMaximumNumberOfConcurrentStreams() const noexcept;
 
     /// @brief Sets the maximum request duration.
     //void setMaximumRequestDuration(const std::chrono::milliseconds &duration);

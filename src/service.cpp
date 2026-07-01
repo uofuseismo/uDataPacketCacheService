@@ -143,6 +143,10 @@ public:
         mStreamDequeMap(std::move(streamDequeMap)),
         mLogger(std::move(logger))
     {
+        if (!mOptions.hasGRPCOptions())
+        {
+            throw std::invalid_argument("gRPC options not set for server");
+        }
         if (mStreamDequeMap == nullptr)
         {
             throw std::invalid_argument("Stream deque map is null");
@@ -155,6 +159,8 @@ public:
             mLogger = spdlog::stdout_color_mt("ServiceConsole-" + classId);
             // NOLINTEND(misc-include-cleaner)
         }
+        mMaximumNumberOfClients
+            = mOptions.getMaximumNumberOfConcurrentStreams();
     }
 
     // Available streams - more of a debugging tool than anything useful
@@ -177,6 +183,7 @@ public:
                 mLogger(std::move(logger))
             {
                 auto &metrics = MetricsSingleton::getInstance();
+                metrics.incrementNumberOfClients();
                 // Validate the client?
                 if (isSecured)
                 {
@@ -232,6 +239,11 @@ public:
                 }
                 mSuccess = true;
                 Finish(grpc::Status::OK);
+#ifndef NDEBUG
+                SPDLOG_LOGGER_DEBUG(mLogger,
+                                    "Successfully found streams for {}",
+                                    requestIdentifier);
+#endif
             }
         private:
             void OnDone() override
@@ -243,6 +255,8 @@ public:
                                         "GetAvailableStreams RPC completed");
                 }
 #endif
+                auto &metrics = MetricsSingleton::getInstance();
+                metrics.decrementNumberOfClients();
                 if (mSuccess)
                 {
                     auto endTime
@@ -298,6 +312,7 @@ public:
                 mLogger(std::move(logger))
             {
                 auto &metrics = MetricsSingleton::getInstance();
+                metrics.incrementNumberOfClients();
                 // Validate the client?
                 if (isSecured)
                 {
@@ -478,6 +493,8 @@ public:
                                         "GetTimeSeries RPC completed");
                 }
 #endif
+                auto &metrics = MetricsSingleton::getInstance();
+                metrics.decrementNumberOfClients();
                 if (mSuccess)
                 {
                     auto endTime
@@ -506,7 +523,17 @@ public:
             };
             bool mSuccess{false};
         }; 
-        context->set_compression_algorithm(GRPC_COMPRESS_DEFLATE);
+        auto compression = mOptions.getCompressionAlgorithm();
+        if (compression ==
+            ServiceOptions::CompressionAlgorithm::Deflate)
+        {
+            context->set_compression_algorithm(GRPC_COMPRESS_DEFLATE);
+        }
+        else if (compression ==
+                 ServiceOptions::CompressionAlgorithm::GZIP)
+        {
+            context->set_compression_algorithm(GRPC_COMPRESS_GZIP);
+        }
         return new Reactor(context,
                            *request,
                            response,
@@ -523,27 +550,22 @@ public:
         mGRPCOptions = mOptions.getGRPCOptions();
         const auto address = mGRPCOptions.getHost() + ":"
                            + std::to_string(mGRPCOptions.getPort());
-        // Connections are closed after this amount of time.
-        constexpr std::chrono::milliseconds
-              maxConnectionAge{std::chrono::seconds {30}};
-        // After connection reaches max age - this is how long we wait for
-        // outstanding RPCs to complete
-        constexpr std::chrono::milliseconds
-             maxConnectionGrace{std::chrono::seconds {10}};
-        // Maximum number of incoming streams to allow on an http2 connection
-        constexpr int maxConcurrentStreams{64};
-        auto &builder = grpc::ServerBuilder {}
-           .SetOption(grpc::MakeChannelArgumentOption(
-                            "GRPC_ARG_MAX_CONNECTION_AGE_MS",
-                             static_cast<int> (maxConnectionAge.count())))
-           .SetOption(grpc::MakeChannelArgumentOption(
-                            "GRPC_ARG_MAX_CONNECTION_AGE_GRACE_MS",
-                             static_cast<int> (maxConnectionGrace.count())))
-           .SetOption(grpc::MakeChannelArgumentOption(
-                            "GRPC_ARG_MAX_CONCURRENT_STREAMS",
-                             maxConcurrentStreams));
+        grpc::ServerBuilder builder;
         builder.SetMaxSendMessageSize(
             mOptions.getMaximumRequestMessageSizeInBytes());
+        builder.SetMaxSendMessageSize(
+            mOptions.getMaximumRequestMessageSizeInBytes());
+        builder.SetOption(grpc::MakeChannelArgumentOption(
+               "GRPC_ARG_MAX_CONNECTION_AGE_MS",
+               static_cast<int>
+                  (mOptions.getMaximumConnectionAge().count())));
+        builder.SetOption(grpc::MakeChannelArgumentOption(
+               "GRPC_ARG_MAX_CONNECTION_AGE_GRACE_MS",
+               static_cast<int>
+                   (mOptions.getMaximumConnectionAgeGracePeriod().count())));
+        builder.SetOption(grpc::MakeChannelArgumentOption(
+               "GRPC_ARG_MAX_CONCURRENT_STREAMS",
+                mOptions.getMaximumNumberOfConcurrentStreams()));
 
         if (mGRPCOptions.getServerKey() == std::nullopt ||
             mGRPCOptions.getServerCertificate() == std::nullopt)
@@ -574,6 +596,7 @@ public:
                                      grpc::SslServerCredentials(sslOptions));
             mSecured = true;
         }
+        SPDLOG_LOGGER_INFO(mLogger, "Building server");
         builder.RegisterService(this);
         SPDLOG_LOGGER_INFO(mLogger,
                            "DataPacketCacheService listening at {}", address);
@@ -607,8 +630,6 @@ public:
             }
             mServer = nullptr;
         }
-//        mSubscriberCount.store(0);
-//        MetricsSingleton::getInstance().updateSubscribeServiceUtilization(0);
         mStarted = false;
     }
 
@@ -625,7 +646,9 @@ public:
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
     std::unique_ptr<grpc::Server> mServer{nullptr};
     GRPCServerOptions mGRPCOptions;
+    std::atomic<int> mNumberOfClients{0};
     std::atomic<bool> mKeepRunning{true};
+    int mMaximumNumberOfClients{64};
     bool mSecured{false};
     bool mStarted{false};
 };

@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <mutex>
 #include "uDataPacketCacheService/metricsSingleton.hpp"
@@ -22,6 +24,8 @@ void MetricsSingleton::resetCounters()
     mInvalidAccessCounter.store(0);
     mInvalidRequestsCounter.store(0);
     mServerErrorCounter.store(0);
+    mNumberOfClients.store(0);
+    mMaximumNumberOfClients = 0;
 }
 
 void UDataPacketCacheService::initializeMetricsSingleton()
@@ -79,7 +83,7 @@ void MetricsSingleton::incrementInvalidRequestCounter()
      mInvalidRequestsCounter.fetch_add(1, std::memory_order_relaxed);
 }
     
-int64_t MetricsSingleton::getInvalidRequestsCount() const noexcept
+int64_t MetricsSingleton::getInvalidRequestCount() const noexcept
 {
     return mInvalidRequestsCounter.load(std::memory_order_relaxed);
 }
@@ -101,8 +105,43 @@ void MetricsSingleton::incrementSuccessfulRPCCounter() noexcept
     mSuccessfulRPCCounter.fetch_add(1, std::memory_order_relaxed);
 }
 
-int64_t MetricsSingleton::getSuccessfulRCPCount() const noexcept
+int64_t MetricsSingleton::getSuccessfulRPCCount() const noexcept
 {
     return mSuccessfulRPCCounter.load(std::memory_order_relaxed);
 }
 
+/// Utilization
+double MetricsSingleton::getServiceUtilization() const noexcept
+{
+    auto nClients =  getNumberOfClients(); 
+    auto maxClients = getMaximumNumberOfClients();
+    auto utilization
+        = static_cast<double> (std::max(0, nClients))
+         /std::max(1, maxClients);
+    return std::max(0.0, std::min(1.0, utilization));
+}
+
+/// Clients
+int MetricsSingleton::getMaximumNumberOfClients() const noexcept
+{
+    return mMaximumNumberOfClients;
+}
+
+void MetricsSingleton::incrementNumberOfClients() noexcept
+{
+    mNumberOfClients.fetch_add(1, std::memory_order::seq_cst);
+}
+
+void MetricsSingleton::decrementNumberOfClients() noexcept
+{
+    auto previous = mNumberOfClients.fetch_sub(1, std::memory_order::seq_cst);
+    if (previous <= 0)
+    {
+        mNumberOfClients.store(0, std::memory_order::seq_cst);
+    } 
+}
+
+int MetricsSingleton::getNumberOfClients() const noexcept
+{
+    return mNumberOfClients.load(std::memory_order_relaxed);
+}
