@@ -62,6 +62,9 @@ public:
     /// @note This is a debugging function.
     [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::Packet> getAllPackets() const;
 
+    /// @result The last time this stream was updated.
+    [[nodiscard]] std::chrono::microseconds getLastUpdate() const noexcept;
+
     /// @brief Destructor.
     ~StreamDeque();
 

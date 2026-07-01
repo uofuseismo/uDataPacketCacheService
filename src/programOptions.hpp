@@ -419,6 +419,16 @@ UDataPacketCacheService::ServiceOptions
     // Service options
     options.serviceOptions = getPublishServiceOptions(propertyTree);
 
+    auto maximumPacketDurationInSeconds
+        = static_cast<int>(options.streamDequeMapOptions.
+                           getMaximumDuration().count());
+    maximumPacketDurationInSeconds
+        = propertyTree.get<int> (
+             "Service.maximumPacketRetentionDurationInSeconds",
+             maximumPacketDurationInSeconds);
+    options.streamDequeMapOptions.setMaximumDuration(
+        std::chrono::seconds {maximumPacketDurationInSeconds});
+
     // Logging
     options.exportLogs = false;
     if (propertyTree.get_optional<std::string> ("OTelHTTPLogOptions"))

@@ -3,6 +3,7 @@
 #include <utility>
 #include <memory>
 #include <string>
+#include <vector>
 #include <opentelemetry/nostd/shared_ptr.h>
 #include <opentelemetry/metrics/meter_provider.h>
 #include <opentelemetry/exporters/otlp/otlp_http.h>
@@ -18,6 +19,9 @@
 #include <opentelemetry/sdk/metrics/meter_context_factory.h>
 #include <opentelemetry/sdk/metrics/meter_provider_factory.h>
 #include <opentelemetry/sdk/metrics/provider.h>
+#include <opentelemetry/sdk/metrics/view/instrument_selector_factory.h>
+#include <opentelemetry/sdk/metrics/view/meter_selector_factory.h>
+#include <opentelemetry/sdk/metrics/view/view_factory.h>
 #include "otelOptions.hpp"
 
 namespace
@@ -39,6 +43,52 @@ opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
     serverErrorCounter;
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
     successfulRPCCounter;
+opentelemetry::nostd::unique_ptr<opentelemetry::metrics::Histogram<double>>
+    rpcServiceHistogram{nullptr};
+
+void initializeRPCHistogram(
+    opentelemetry::sdk::metrics::MeterProvider *providerInstance)
+{
+    // Histogram config
+    auto histogramInstrumentSelector
+        = opentelemetry::sdk::metrics::InstrumentSelectorFactory::Create(
+             opentelemetry::sdk::metrics::InstrumentType::kHistogram,
+             "rpc_duration_histogram",
+             "s");  
+    auto histogramMeterSelector
+        = opentelemetry::sdk::metrics::MeterSelectorFactory::Create(
+             "rpc_duration",
+             "1.2.0",
+             "https://opentelemetry.io/schemas/1.2.0");
+    auto histogramAggregationConfig
+        = std::make_shared<opentelemetry::sdk::metrics::HistogramAggregationConfig> (); 
+    histogramAggregationConfig->boundaries_
+        = std::vector<double> {0.0,
+                               0.0001,
+                               0.0005,
+                               0.0010,
+                               0.0050,
+                               0.0100,
+                               0.0500,
+                               0.1000,
+                               0.5000,
+                               1.0000,
+                               5.0000,
+                               10.0000,
+                               50.0000,
+                               100.000};
+    auto histogramView 
+        = opentelemetry::sdk::metrics::ViewFactory::Create(
+             "rpc_duration",
+             "Time required to for an RPC to complete",
+             opentelemetry::sdk::metrics::AggregationType::kHistogram,
+             histogramAggregationConfig);
+
+    providerInstance->AddView(std::move(histogramInstrumentSelector),
+                      std::move(histogramMeterSelector),
+                      std::move(histogramView));
+
+}
 
 void initializeHTTP(
     const bool exportMetrics,
@@ -75,6 +125,8 @@ void initializeHTTP(
     auto metricsProvider
         = otel::sdk::metrics::MeterProviderFactory::Create(
              std::move(context));
+
+    ::initializeRPCHistogram(metricsProvider.get());
 
     const std::shared_ptr<otel::metrics::MeterProvider>
         provider(std::move(metricsProvider));
@@ -121,6 +173,8 @@ void initializeGRPC(
     auto metricsProvider
         = otel::sdk::metrics::MeterProviderFactory::Create(
              std::move(context));
+
+    ::initializeRPCHistogram(metricsProvider.get());
 
     const std::shared_ptr<otel::metrics::MeterProvider>
         provider(std::move(metricsProvider));

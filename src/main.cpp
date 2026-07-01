@@ -74,7 +74,8 @@ public:
             = std::make_unique<Service> (
                 mOptions.serviceOptions,
                 mStreamDequeMap,
-                mLogger);
+                mLogger,
+                mRecordDurationForMetrics);
 
         // Metrics
         if (mOptions.exportMetrics)
@@ -149,7 +150,12 @@ public:
                 UDataPacketCacheService::Metrics::observeNumberOfSuccesses,
                 nullptr);
 
-
+            auto histgoramMeter = provider->GetMeter("rpc_duration", "1.2.0");
+            rpcServiceHistogram
+                = histgoramMeter->CreateDoubleHistogram(
+                    "seismic_data.waveform_storage.service.duration",
+                    "Time required to process a waveform request as a histogram.",
+                    "{s}");
         }
     }
 
@@ -458,6 +464,19 @@ public:
         mSignalStatus = signal;
         mInterrupted.store(true);
     }   
+
+    void recordDurationForMetrics(const double duration,
+                                  const std::string &endPoint)
+    {
+        if (rpcServiceHistogram != nullptr)
+        {
+            const std::map<std::string, std::string> histogramKey
+            {
+                {"endpoint", endPoint}
+            };
+            rpcServiceHistogram->Record(duration, histogramKey);
+        }
+    }
 //public:
     ::ProgramOptions mOptions;
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
@@ -481,6 +500,12 @@ public:
         std::bind(&Process::addPacket, this,
                   std::placeholders::_1)
     };  
+    std::function<void(double, const std::string &)> mRecordDurationForMetrics
+    {
+        std::bind(&Process::recordDurationForMetrics, this,
+                  std::placeholders::_1,
+                  std::placeholders::_2)
+    };
     std::chrono::seconds mLastReport
     {
         std::chrono::duration_cast<std::chrono::seconds>

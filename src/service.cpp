@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <future>
 #include <memory>
 #include <optional>
@@ -138,10 +139,12 @@ public:
     // Constructor
     ServiceImpl(const ServiceOptions &options,
                 std::shared_ptr<StreamDequeMap> streamDequeMap,
-                std::shared_ptr<spdlog::logger> logger) :
+                std::shared_ptr<spdlog::logger> logger,
+                const std::function<void (double, const std::string &)> &recordDuration) :
         mOptions(options),
         mStreamDequeMap(std::move(streamDequeMap)),
-        mLogger(std::move(logger))
+        mLogger(std::move(logger)),
+        mRecordDurationForMetrics(recordDuration)
     {
         if (!mOptions.hasGRPCOptions())
         {
@@ -179,8 +182,10 @@ public:
                     const bool isSecured,
                     const GRPCServerOptions &grpcOptions,
                     StreamDequeMap &streamDequeMap,
-                    std::shared_ptr<spdlog::logger> logger) :
-                mLogger(std::move(logger))
+                    std::shared_ptr<spdlog::logger> logger,
+                    const std::function<void (double, const std::string &)> &recordDuration) :
+                mLogger(std::move(logger)),
+                mRecordDurationCallback(recordDuration)
             {
                 auto &metrics = MetricsSingleton::getInstance();
                 metrics.incrementNumberOfClients();
@@ -264,6 +269,7 @@ public:
                     auto elapsedTime
                         = static_cast<double>
                           (endTime.count() - mRPCStartTime.count())*1.e-9;
+                    mRecordDurationCallback(elapsedTime, "GetAvailableStreams");
                 }
                 delete this;
             }
@@ -279,6 +285,8 @@ public:
             }
 //private:
             std::shared_ptr<spdlog::logger> mLogger{nullptr};
+            std::function<void (double, const std::string &)>
+                mRecordDurationCallback;
             std::chrono::nanoseconds mRPCStartTime
             {
                 Utilities::getNow<std::chrono::nanoseconds> ()
@@ -291,7 +299,8 @@ public:
                            mSecured,
                            mGRPCOptions,
                            *mStreamDequeMap,
-                           mLogger);
+                           mLogger,
+                           mRecordDurationForMetrics);
     }
     // Time series request
     grpc::ServerUnaryReactor
@@ -308,8 +317,10 @@ public:
                     const bool isSecured,
                     const GRPCServerOptions &grpcOptions,
                     StreamDequeMap &streamDequeMap,
-                    std::shared_ptr<spdlog::logger> logger) :
-                mLogger(std::move(logger))
+                    std::shared_ptr<spdlog::logger> logger,
+                    const std::function<void (double, const std::string &)> &recordDuration) :
+                mLogger(std::move(logger)),
+                mRecordDurationCallback(recordDuration)
             {
                 auto &metrics = MetricsSingleton::getInstance();
                 metrics.incrementNumberOfClients();
@@ -502,6 +513,7 @@ public:
                     auto elapsedTime
                         = static_cast<double>
                           (endTime.count() - mRPCStartTime.count())*1.e-9;
+                    mRecordDurationCallback(elapsedTime, "GetTimeSeries");
                 }
                 delete this;
             }
@@ -517,6 +529,8 @@ public:
             }
 //private:
             std::shared_ptr<spdlog::logger> mLogger{nullptr};
+            std::function<void (double, const std::string &)>
+                mRecordDurationCallback;
             std::chrono::nanoseconds mRPCStartTime
             {
                 Utilities::getNow<std::chrono::nanoseconds> ()
@@ -540,7 +554,8 @@ public:
                            mSecured,
                            mGRPCOptions,
                            *mStreamDequeMap,
-                           mLogger);
+                           mLogger,
+                           mRecordDurationForMetrics);
     }
 
     void start()
@@ -644,6 +659,7 @@ public:
     ServiceOptions mOptions; 
     std::shared_ptr<StreamDequeMap> mStreamDequeMap{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
+    std::function<void (double, const std::string &)> mRecordDurationForMetrics;
     std::unique_ptr<grpc::Server> mServer{nullptr};
     GRPCServerOptions mGRPCOptions;
     std::atomic<int> mNumberOfClients{0};
@@ -656,10 +672,12 @@ public:
 /// Constructor
 Service::Service(const ServiceOptions &options,
                  std::shared_ptr<StreamDequeMap> streamDequeMap,
-                 std::shared_ptr<spdlog::logger> logger) :
+                 std::shared_ptr<spdlog::logger> logger,
+                 const std::function<void (double, const std::string &)> &recordDuration) :
     pImpl(std::make_unique<ServiceImpl> (options,
                                          std::move(streamDequeMap),
-                                         std::move(logger)))
+                                         std::move(logger),
+                                         recordDuration))
 {
 }
 

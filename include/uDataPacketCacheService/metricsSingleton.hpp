@@ -3,6 +3,8 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <opentelemetry/nostd/unique_ptr.h>
+#include <opentelemetry/metrics/meter.h>
 namespace UDataPacketCacheService
 {
 /// @class MetricsSingleton metricsSingleton.hpp

@@ -1,6 +1,7 @@
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
+#include <atomic>
 #ifndef NDEBUG
 #include <cassert>
 #endif
@@ -42,6 +43,9 @@ public:
         mOptions(options)
     {
         mMaximumNumberOfPackets = mOptions.getMaximumNumberOfPackets(); 
+        mLastUpdate.store(
+            Utilities::getNow<std::chrono::microseconds> (), 
+            std::memory_order::seq_cst);
     }
 
     void addPacket(UDataPacketCacheServiceAPI::V1::Packet &&packet)
@@ -64,7 +68,9 @@ public:
         if (mDeque.empty())
         {
             mDeque.push_back(std::move(newPacket));
-            mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
+            mLastUpdate.store(
+                Utilities::getNow<std::chrono::microseconds> (),
+                std::memory_order::seq_cst);
             return;
         }
 
@@ -77,7 +83,9 @@ public:
         {
             if (isFull){mDeque.pop_front();}
             mDeque.push_back(std::move(newPacket));
-            mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
+            mLastUpdate.store(
+                Utilities::getNow<std::chrono::microseconds> (),
+                std::memory_order::seq_cst);
             return;
         }
         // There's a wonky case where this can happen.  The latest
@@ -86,7 +94,9 @@ public:
         {
             if (isFull){mDeque.pop_front();}
             mDeque.push_back(std::move(newPacket));
-            mLastUpdate = Utilities::getNow<std::chrono::microseconds> (); 
+            mLastUpdate.store(
+                Utilities::getNow<std::chrono::microseconds> (),
+                std::memory_order::seq_cst);
             return;
         }
         // Maybe we can insert at the beginning
@@ -95,7 +105,9 @@ public:
         // acquired and skip it (duplicate or less likely a GPS slip).
         if (startTime == currentEarliestTime)
         {
-            mLastUpdate = Utilities::getNow<std::chrono::microseconds> (); 
+            mLastUpdate.store(
+                Utilities::getNow<std::chrono::microseconds> (),
+                std::memory_order::seq_cst); 
             return;
         }
         // The buffer is full and we need to prioritize new data so skip this.
@@ -103,7 +115,9 @@ public:
         // still active.
         if (startTime < currentEarliestTime && isFull)
         {
-            mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
+            mLastUpdate.store(
+                Utilities::getNow<std::chrono::microseconds> (),
+                std::memory_order::seq_cst);
             return;
         }
         // Okay, there's space at the beginning so accomodate it.
@@ -111,7 +125,9 @@ public:
         if (endTime <= currentEarliestTime && !isFull) 
         {
             mDeque.push_front(std::move(newPacket));
-            mLastUpdate = Utilities::getNow<std::chrono::microseconds> ();
+            mLastUpdate.store(
+                Utilities::getNow<std::chrono::microseconds> (),
+                std::memory_order::seq_cst);
             return;
         }
 
@@ -131,14 +147,18 @@ public:
             if (startTime == startTimeNeighbor)
             {
                 //mDeque[index] = std::move(newPacket);
-                mLastUpdate = Utilities::getNow<std::chrono::microseconds> (); 
+                mLastUpdate.store(
+                    Utilities::getNow<std::chrono::microseconds> (),
+                    std::memory_order::seq_cst);
                 return; 
             }
             // Insert the element before its upper bounding element
             mDeque.insert(it, std::move(newPacket));
             // Pop first element
             if (isFull){mDeque.pop_front();}
-            mLastUpdate = Utilities::getNow<std::chrono::microseconds> (); 
+            mLastUpdate.store(
+                Utilities::getNow<std::chrono::microseconds> (),
+                 std::memory_order::seq_cst);; 
             // Debug code checks this is sorted
 #ifndef NDEBUG
             assert(std::is_sorted(mDeque.begin(),
@@ -252,9 +272,10 @@ public:
     StreamDequeOptions mOptions;
     std::deque<::PacketTime> mDeque;
     std::string mStreamIdentifier;
-size_t mMaximumNumberOfPackets{8192};
+    size_t mMaximumNumberOfPackets{8192};
     //std::chrono::nanoseconds mMaximumDuration;
-    std::chrono::microseconds mLastUpdate{0};
+    // N.B. creation counts as an update
+    std::atomic<std::chrono::microseconds> mLastUpdate;
 };
 
 /// Constructor
@@ -360,6 +381,12 @@ void StreamDeque::removeExpiredPackets(
     const std::chrono::nanoseconds &oldestTime)
 {
     pImpl->removeExpiredPackets(oldestTime);
+}
+
+/// Last update
+std::chrono::microseconds StreamDeque::getLastUpdate() const noexcept
+{
+    return pImpl->mLastUpdate.load(std::memory_order::seq_cst);
 }
 
 ///--------------------------------------------------------------------------///

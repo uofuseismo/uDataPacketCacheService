@@ -1,6 +1,7 @@
 #ifndef UDATA_PACKET_CACHE_SERVICE_SERVICE_HPP
 #define UDATA_PACKET_CACHE_SERVICE_SERVICE_HPP
 #include <spdlog/logger.h>
+#include <functional>
 #include <future>
 #include <memory>
 namespace UDataPacketCacheService
@@ -20,7 +21,8 @@ public:
     /// @brief Creates the service.
     Service(const ServiceOptions &options,
             std::shared_ptr<StreamDequeMap> streamDequeMap,
-            std::shared_ptr<spdlog::logger> logger);  
+            std::shared_ptr<spdlog::logger> logger,
+            const std::function<void (double, const std::string &)> &recordDurationCallback);  
 
     /// @brief Runs the service on a separate thread.
     std::future<void> start();
