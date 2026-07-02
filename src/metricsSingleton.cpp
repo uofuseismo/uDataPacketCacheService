@@ -19,6 +19,7 @@ MetricsSingleton &MetricsSingleton::getInstance()
 void MetricsSingleton::resetCounters()
 {
     mPacketsReceivedCounter.store(0);
+    mPacketsRemovedCounter.store(0);
     mInvalidPacketsReceivedCounter.store(0);
     mImportOverflowPacketCounter.store(0);
     mSuccessfulRPCCounter.store(0);
@@ -154,4 +155,15 @@ void MetricsSingleton::decrementNumberOfClients() noexcept
 int MetricsSingleton::getNumberOfClients() const noexcept
 {
     return mNumberOfClients.load(std::memory_order_relaxed);
+}
+
+void MetricsSingleton::incrementPacketsRemovedCounter(
+    const uint32_t nRemoved)
+{
+    mPacketsRemovedCounter.fetch_add(nRemoved, std::memory_order_relaxed);
+}
+
+int64_t MetricsSingleton::getPacketsRemovedCount() const noexcept
+{
+    return mPacketsRemovedCounter.load(std::memory_order_relaxed);
 }

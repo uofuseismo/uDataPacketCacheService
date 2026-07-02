@@ -1,4 +1,4 @@
-//#include <chrono>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -9,9 +9,8 @@ using namespace UDataPacketCacheService;
 class StreamDequeOptions::StreamDequeOptionsImpl
 {
 public:
-    // 5 minutes (300 s).  Assume 2s packets (generous).
-    // Then there would be 150 packets.
-    int mMaximumNumberOfPackets{150};
+    // Effectively unlimited.
+    int mMaximumNumberOfPackets{std::numeric_limits<int>::max()};
     //std::chrono::nanoseconds mMaximumDuration{std::chrono::minutes {5}};
 };
 

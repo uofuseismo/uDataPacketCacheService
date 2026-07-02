@@ -1,5 +1,6 @@
 #ifndef UDATA_PACKET_CACHE_SERVICE_STREAM_DEQUE_HPP
 #define UDATA_PACKET_CACHE_SERVICE_STREAM_DEQUE_HPP
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -47,7 +48,7 @@ public:
     /// @param[in] oldestTime   If the packet's end time is less than this
     ///                         then it will be removed.
     /// @result The number of packets deleted.
-    void removeExpiredPackets(const std::chrono::nanoseconds &oldestTime);
+    uint32_t removeExpiredPackets(const std::chrono::nanoseconds &oldestTime);
     
     /// @brief Gets the packets with data between the desired start and end
     ///        time.  Note, there may be some data that arrives before and

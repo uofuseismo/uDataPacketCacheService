@@ -32,6 +32,8 @@ bool metricsInitialized{false};
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
     receivedPacketsCounter;
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+    removedPacketsCounter;
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
     invalidPacketsCounter;
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
     importOverflowPacketsCounter;
@@ -242,6 +244,32 @@ void observeNumberOfPacketsReceived(
         observer->Observe(value);
     }   
 }
+
+void observeNumberOfPacketsRemoved(
+    opentelemetry::metrics::ObserverResult observerResult,
+    void *)
+{
+    if (opentelemetry::nostd::holds_alternative
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+                opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult))
+    {
+        auto observer = opentelemetry::nostd::get
+        <
+            opentelemetry::nostd::shared_ptr
+            <
+               opentelemetry::metrics::ObserverResultT<int64_t>
+            >
+        > (observerResult);
+        auto &instance = MetricsSingleton::getInstance();
+        auto value = instance.getPacketsRemovedCount();
+        observer->Observe(value);
+    }   
+}
+
 
 void observeNumberOfInvalidPacketsReceived(
     opentelemetry::metrics::ObserverResult observerResult,

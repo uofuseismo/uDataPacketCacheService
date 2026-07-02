@@ -95,11 +95,20 @@ public:
             // Packets received
             receivedPacketsCounter
                 = meter->CreateInt64ObservableCounter(
-                  "seismic_data.waveform_storage.packet_cache.client.packets.received.",
+                  "seismic_data.waveform_storage.packet_cache.client.packets.received",
                   "Number of seismic data packets received by the import client",
                   "{packets}");
             receivedPacketsCounter->AddCallback(
                 UDataPacketCacheService::Metrics::observeNumberOfPacketsReceived,
+                nullptr);
+
+            removedPacketsCounter
+                = meter->CreateInt64ObservableCounter(
+                  "seismic_data.waveform_storage.packet_cache.service.packets.removed",
+                  "Number of seismic data packets removed as they have expired", 
+                  "{packets}");
+            removedPacketsCounter->AddCallback(
+                UDataPacketCacheService::Metrics::observeNumberOfPacketsRemoved,
                 nullptr);
 
             invalidPacketsCounter
@@ -266,11 +275,13 @@ public:
     {
         constexpr std::chrono::seconds cleanupInterval{30};
         int nConsecutiveErrors{0};
+        auto &metrics = MetricsSingleton::getInstance();
         while (mKeepRunning.load())
         {
             try
             {
-                mStreamDequeMap->removeExpiredPackets();
+                auto nRemoved = mStreamDequeMap->removeExpiredPackets();
+                metrics.incrementPacketsRemovedCounter(nRemoved);
                 nConsecutiveErrors = 0;
             }
             catch (const std::exception &e)
@@ -320,7 +331,7 @@ public:
                 if (!Utilities::isValid(packet, reason))
                 {
                     metrics.incrementInvalidPacketsReceivedCounter();
-                    SPDLOG_LOGGER_DEBUG(mLogger, "Skipping packet because {}",
+                    SPDLOG_LOGGER_WARN(mLogger, "Skipping packet because {}",
                                         reason);
                     continue;
                 }
@@ -343,7 +354,7 @@ public:
                             continue;
                         }
                     }
-                    if (checkLatency)
+                    if (checkFuture)
                     {
                         auto endTime
                             = Utilities::getStartTime<std::chrono::nanoseconds>
@@ -390,6 +401,7 @@ public:
         mLastReport = now;
         auto &metrics = MetricsSingleton::getInstance(); 
         auto nPacketsReceived = metrics.getPacketsReceivedCount();
+        auto nPacketsRemoved = metrics.getPacketsRemovedCount();
         auto nInvalidPackets = metrics.getInvalidPacketsReceivedCount();
         auto nOverflow = metrics.getImportOverflowPacketCount();
         auto nRejected = metrics.getInvalidAccessCount();
@@ -402,10 +414,11 @@ public:
         //auto nClients = metrics.getNumberOfClients();
         //auto utilization = metrics.getServiceUtilization();
         auto nPacketsReport = nPacketsReceived - mPacketsReceivedLastReport; 
-        SPDLOG_LOGGER_INFO(mLogger, "Since last report: Received {} packets ({} invalid, {} lost due to buffer overflow).  Rejected {} accesses.  Processed {} requests ({} succeeded, {} invalid, {} failed).",
+        SPDLOG_LOGGER_INFO(mLogger, "Since last report: Received {} packets ({} invalid, {} lost due to buffer overflow, {} aged out).  Rejected {} accesses.  Processed {} requests ({} succeeded, {} invalid, {} failed).",
            nPacketsReceived - mPacketsReceivedLastReport,
            nInvalidPackets - mInvalidPacketsLastReport, 
            nOverflow - mOverflowLastReport, 
+           nPacketsRemoved - mPacketsRemovedLastReport,
            nRejected - mRejectedLastReport, 
            nTotalRequests - mTotalRequestsLastReport,
            nSuccessfulRequests - mSuccessfulRequestsLastReport,
@@ -416,6 +429,7 @@ public:
         mPacketsReceivedLastReport = nPacketsReceived;
         mInvalidPacketsLastReport = nInvalidPackets; 
         mOverflowLastReport = nOverflow;
+        mPacketsRemovedLastReport = nPacketsRemoved;
         mRejectedLastReport = nRejected;
         mTotalRequestsLastReport = nTotalRequests;
         mSuccessfulRequestsLastReport = nSuccessfulRequests;
@@ -554,6 +568,7 @@ public:
     int64_t mMaximumImportQueueSize{4096};
     int64_t mPacketsReceivedLastReport{0};
     int64_t mInvalidPacketsLastReport{0};
+    int64_t mPacketsRemovedLastReport{0};
     int64_t mOverflowLastReport{0};
     int64_t mTotalRequestsLastReport{0};
     int64_t mSuccessfulRequestsLastReport{0};

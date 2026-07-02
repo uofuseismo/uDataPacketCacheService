@@ -1,7 +1,8 @@
 #ifndef UDATA_PACKET_CACHE_SERVICE_STREAM_DEQUE_MAP_HPP
 #define UDATA_PACKET_CACHE_SERVICE_STREAM_DEQUE_MAP_HPP
-#include <vector>
+#include <cstdint>
 #include <memory>
+#include <vector>
 #include <spdlog/logger.h>
 
 namespace UDataPacketCacheServiceAPI::V1
@@ -40,7 +41,7 @@ public:
     void addPacket(const UDataPacketServiceAPI::V1::Packet &packet);
 
     /// @brief Cleans out expired packets from the stream deques.
-    void removeExpiredPackets();
+    uint32_t removeExpiredPackets();
 
     /// @result True indicates the stream exists.
     [[nodiscard]] bool exists(const std::string &identifier) const noexcept;

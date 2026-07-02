@@ -1,7 +1,6 @@
 #ifndef UDATA_PACKET_CACHE_SERVICE_STREAM_DEQUE_OPTIONS_HPP
 #define UDATA_PACKET_CACHE_SERVICE_STREAM_DEQUE_OPTIONS_HPP
 #include <memory>
-#include <optional>
 #include <chrono>
 namespace UDataPacketCacheService
 {
@@ -22,10 +21,12 @@ public:
     StreamDequeOptions(StreamDequeOptions &&options) noexcept;
 
     /// @brief Sets the maximum number of packets.
+    /// @note This is a safety mechanism that can ultimately do more harm than
+    ///       good.  Nominally, we rely on the retention duration to control
+    ///       this number.
     void setMaximumNumberOfPackets(int maxPackets);
     /// @result The maximum number of packets.
-    /// @note By default this is 150 which, at packets of 2s duration,
-    ///       will yield about 300 s (5 minutes) of data.
+    /// @note By default this is effectively unlimited.
     [[nodiscard]] int getMaximumNumberOfPackets() const noexcept;
     
     /// @brief Sets the maximum duration.  The duration is measured from now

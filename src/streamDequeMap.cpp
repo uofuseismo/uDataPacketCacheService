@@ -1,6 +1,8 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -55,7 +57,9 @@ public:
             return;
         }
         // Okay do this the hard way
+// TODO should make this an option that comes in instead of relying on default
         StreamDequeOptions options;
+        //options.setMaximumNumberOfPackets(std::numeric_limits<uint16_t>::max());
         auto streamDeque
             = std::make_unique<StreamDeque> (options, std::move(packet));
         auto newNode
@@ -72,14 +76,17 @@ public:
                            streamIdentifier);
     }
 
-    void removeExpiredPackets()
+    [[nodiscard]] uint32_t removeExpiredPackets()
     {
+        uint32_t nRemoved{0};
         auto oldestTime = Utilities::getNow<std::chrono::nanoseconds> ()
                         - mOptions.getMaximumDuration();
         for (auto &it : mStreamDequeMap)
         {
-            it.second->removeExpiredPackets(oldestTime);
+            nRemoved = nRemoved
+                     + it.second->removeExpiredPackets(oldestTime);
         }
+        return nRemoved;
     }
 
     [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::Packet>
@@ -159,9 +166,9 @@ void StreamDequeMap::addPacket(
 }
 
 /// Remove expired packets
-void StreamDequeMap::removeExpiredPackets()
+uint32_t StreamDequeMap::removeExpiredPackets()
 {
-    pImpl->removeExpiredPackets();
+    return pImpl->removeExpiredPackets();
 }
 
 std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> 

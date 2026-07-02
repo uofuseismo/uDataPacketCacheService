@@ -1,6 +1,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <optional>
 #include <vector>
@@ -23,7 +24,7 @@ TEST_CASE("UDataPacketCacheService::Options", "[streamDequeOptions]")
 {       
     SECTION("Default")
     {
-        constexpr int maxPackets{150};
+        constexpr int maxPackets{std::numeric_limits<int32_t>::max()};
         const StreamDequeOptions options;
         REQUIRE(options.getMaximumNumberOfPackets() == maxPackets);
         //REQUIRE(options.getMaximumDuration() == duration);

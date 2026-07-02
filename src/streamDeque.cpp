@@ -7,6 +7,7 @@
 #endif
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <iterator>
 #include <memory>
@@ -173,13 +174,15 @@ public:
 
     }
 
-    void removeExpiredPackets(const std::chrono::nanoseconds &oldestTime)
+    uint32_t removeExpiredPackets(const std::chrono::nanoseconds &oldestTime)
     {
-        std::erase_if(mDeque, 
-                      [&oldestTime](const auto &item)
-                      {
-                          return item.endTime < oldestTime;
-                      });
+        auto nRemoved
+            = std::erase_if(mDeque, 
+                            [&oldestTime](const auto &item)
+                            {
+                                return item.endTime < oldestTime;
+                            });
+        return static_cast<uint32_t> (nRemoved);
     }
 
     [[nodiscard]] std::vector<UDataPacketCacheServiceAPI::V1::Packet> getAllPackets() const
@@ -377,10 +380,10 @@ std::string StreamDeque::getIdentifier() const noexcept
 StreamDeque::~StreamDeque() = default;
 
 /// Purge the old packets
-void StreamDeque::removeExpiredPackets(
+uint32_t StreamDeque::removeExpiredPackets(
     const std::chrono::nanoseconds &oldestTime)
 {
-    pImpl->removeExpiredPackets(oldestTime);
+    return pImpl->removeExpiredPackets(oldestTime);
 }
 
 /// Last update

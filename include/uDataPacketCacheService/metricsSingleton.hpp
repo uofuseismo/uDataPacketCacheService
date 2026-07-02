@@ -31,6 +31,11 @@ public:
     /// @result The number of packets received.
     [[nodiscard]] int64_t getPacketsReceivedCount() const noexcept;
 
+    /// @brief Increments the number of packets deleted as they have aged out.
+    void incrementPacketsRemovedCounter(const uint32_t nRemoved);
+    /// @result The number of packets deleted because they have aged out.
+    [[nodiscard]] int64_t getPacketsRemovedCount() const noexcept;
+
     /// @brief Increments the number of invalid packets received counter.
     void incrementInvalidPacketsReceivedCounter() noexcept;
     /// @result The number of invalid packets received.
@@ -75,6 +80,7 @@ private:
     ~MetricsSingleton() = default;
     std::atomic<double> mServiceUtilization{0};
     std::atomic<int64_t> mPacketsReceivedCounter{0};
+    std::atomic<int64_t> mPacketsRemovedCounter{0};
     std::atomic<int64_t> mInvalidPacketsReceivedCounter{0};
     std::atomic<int64_t> mImportOverflowPacketCounter{0};
     std::atomic<int64_t> mSuccessfulRPCCounter{0};
