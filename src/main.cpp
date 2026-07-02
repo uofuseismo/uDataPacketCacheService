@@ -31,6 +31,7 @@
 #include "uDataPacketCacheService/subscriber.hpp"
 #include "uDataPacketCacheService/metricsSingleton.hpp"
 #include "uDataPacketCacheService/utilities.hpp"
+#include "uDataPacketCacheService/version.hpp"
 #include "programOptions.hpp"
 #include "logger.hpp"
 #include "metrics.hpp"
@@ -80,6 +81,9 @@ public:
         // Metrics
         if (mOptions.exportMetrics)
         {
+            auto &metrics = MetricsSingleton::getInstance();
+            metrics.setMaximumNumberOfClients(
+                mOptions.serviceOptions.getMaximumNumberOfConcurrentStreams());
             // Need a provider from which to get a meter.  This is initialized
             // once and should last the duration of the application.
             auto provider
@@ -169,20 +173,22 @@ public:
     {
         mKeepRunning.store(true);
 
+        // Lightweight to launch thread - let it rip through and find nothing
+        auto cleanDequesFuture = std::async(&Process::cleanDeques, this);
+        mFuturesMap.insert_or_assign("CleanDeques",
+                                     std::move(cleanDequesFuture));
+
         // Make sure packet processor is ready to work
         auto packetProcessorFuture = std::async(&Process::processPackets, this);
-        mFuturesMap.insert_or_assign("PacketProcessor", std::move(packetProcessorFuture));
+        mFuturesMap.insert_or_assign("PacketProcessor",
+                                     std::move(packetProcessorFuture));
 
         // Start getting packets
         auto packetSubscriberFuture = mDataPacketSubscriber->start();
-        mFuturesMap.insert_or_assign("DataPacketSubscriber", std::move(packetSubscriberFuture));
-
-        // Won't get packets so fast we need to immediately clean
-        auto cleanDequesFuture = std::async(&Process::cleanDeques, this);
-        mFuturesMap.insert_or_assign("CleanDeques", std::move(cleanDequesFuture));
+        mFuturesMap.insert_or_assign("DataPacketSubscriber",
+                                     std::move(packetSubscriberFuture));
 
         // Finally, open this for business
-        // TODO add service
         auto serviceFuture = mService->start();
         mFuturesMap.insert_or_assign("gRPCService", std::move(serviceFuture));
 
@@ -206,10 +212,10 @@ public:
                 mDataPacketSubscriber->stop();
             }
             std::this_thread::sleep_for(std::chrono::milliseconds {15});
-            // Stop the propagation thread
+            // Stop propagating the packets (that aren't coming)
             mKeepRunning.store(false);
             std::this_thread::sleep_for(std::chrono::milliseconds {15});
-            // Now boot the clients
+            // Now boot the clients (hopefully they got everything by now)
             if (mService != nullptr)
             {
                 mService->stop();
@@ -278,7 +284,7 @@ public:
             if (nConsecutiveErrors > 5)
             {
                 throw std::runtime_error(
-                    "Too many consective errosr cleaning deques");
+                    "Too many consective errors cleaning deques");
             }
             // Wait
             std::unique_lock<std::mutex> lock(mStopMutex);
@@ -317,6 +323,7 @@ public:
                     metrics.incrementInvalidPacketsReceivedCounter();
                     SPDLOG_LOGGER_DEBUG(mLogger, "Skipping packet because {}",
                                         reason);
+                    continue;
                 }
 
                 // Is the packet too old?
@@ -333,21 +340,21 @@ public:
                         {
                             SPDLOG_LOGGER_DEBUG(mLogger,
                                 "Skipping {} because it is has expired data",
-                                 name);
+                                Utilities::toString(packet.stream_identifier()));
                             continue;
                         }
                     }
                     if (checkLatency)
                     {
-                        metrics.incrementInvalidPacketsReceivedCounter();
                         auto endTime
                             = Utilities::getStartTime<std::chrono::nanoseconds>
                               (packet);
                         if (endTime > now + maximumFutureTime)
                         {
+                            metrics.incrementInvalidPacketsReceivedCounter();
                             SPDLOG_LOGGER_DEBUG(mLogger,
                                 "Skipping {} because it has data from future",
-                                 name);
+                                Utilities::toString(packet.stream_identifier()));
                             continue;
                         }
                     }
@@ -382,6 +389,45 @@ public:
             ((std::chrono::high_resolution_clock::now()).time_since_epoch());
         if (now < mLastReport + mOptions.printSummaryInterval){return;}
         mLastReport = now;
+        auto &metrics = MetricsSingleton::getInstance(); 
+        auto nPacketsReceived = metrics.getPacketsReceivedCount();
+        auto nInvalidPackets = metrics.getInvalidPacketsReceivedCount();
+        auto nOverflow = metrics.getImportOverflowPacketCount();
+        auto nRejected = metrics.getInvalidAccessCount();
+        auto nSuccessfulRequests = metrics.getSuccessfulRPCCount();
+        auto nInvalidRequests = metrics.getInvalidRequestCount();
+        auto nServerErrors = metrics.getServerErrorCount();
+        auto nTotalRequests = nSuccessfulRequests
+                            + nInvalidRequests
+                            + nServerErrors;
+        auto nClients = metrics.getNumberOfClients();
+        auto utilization = metrics.getServiceUtilization();
+        auto nPacketsReport = nPacketsReceived - mPacketsReceivedLastReport; 
+        SPDLOG_LOGGER_INFO(mLogger,
+R""""(
+Since last report:
+    Received {} packets ({} were invalid and lost {} due to buffer overflow).
+    Rejected {} accesses.
+    Processed {} requests of which {} succeeded, {} were invalid, and {} failed.
+    Currently servicing {} clients (Service is {} utilized).
+)"""",
+           nPacketsReceived - mPacketsReceivedLastReport,
+           nInvalidPackets - mInvalidPacketsLastReport, 
+           nOverflow - mOverflowLastReport, 
+           nRejected - mRejectedLastReport, 
+           nTotalRequests - mTotalRequestsLastReport,
+           nSuccessfulRequests - mSuccessfulRequestsLastReport,
+           nInvalidRequests - mInvalidRequestsLastReport,
+           nServerErrors - mServerErrorsLastReport,
+           nClients, utilization); 
+        mPacketsReceivedLastReport = nPacketsReceived;
+        mInvalidPacketsLastReport = nInvalidPackets; 
+        mOverflowLastReport = nOverflow;
+        mRejectedLastReport = nRejected;
+        mTotalRequestsLastReport = nTotalRequests;
+        mSuccessfulRequestsLastReport = nSuccessfulRequests;
+        mInvalidRequestsLastReport = nInvalidRequests;
+        mServerErrorsLastReport = nServerErrors;
     }
 
     /// @brief Check futures for exceptions.
@@ -513,6 +559,14 @@ public:
     };
     std::map<std::string, std::future<void>> mFuturesMap;
     int64_t mMaximumImportQueueSize{4096};
+    int64_t mPacketsReceivedLastReport{0};
+    int64_t mInvalidPacketsLastReport{0};
+    int64_t mOverflowLastReport{0};
+    int64_t mTotalRequestsLastReport{0};
+    int64_t mSuccessfulRequestsLastReport{0};
+    int64_t mInvalidRequestsLastReport{0};
+    int64_t mRejectedLastReport{0};
+    int64_t mServerErrorsLastReport{0};
     bool mStopProcessRequested{false};
     bool mTerminateRequested{false};
     bool mIsRunning{false};
@@ -521,7 +575,12 @@ public:
 
 int main(int argc, char *argv[])
 {
-    // Get this out of the way
+    // Prelim stuff to get out of way
+    //NOLINTNEXTLINE(misc-include-cleaner)
+    auto consoleLogger = spdlog::stdout_color_st("console");
+    SPDLOG_LOGGER_INFO(consoleLogger,
+                      "Running version {} of uDataPacketCacheService",
+                      UDataPacketCacheService::Version::getVersionWithTag());
     initializeMetricsSingleton();
 
     // Parse the command line arguments
@@ -540,8 +599,7 @@ int main(int argc, char *argv[])
     catch (const std::exception &e)
     {
         //NOLINTNEXTLINE(misc-include-cleaner)
-        auto logger = spdlog::stdout_color_st("console");
-        SPDLOG_LOGGER_ERROR(logger,
+        SPDLOG_LOGGER_ERROR(consoleLogger,
                             "Failed to read command line options because {}",
                             std::string {e.what()});
         return EXIT_FAILURE;
@@ -555,8 +613,6 @@ int main(int argc, char *argv[])
     }
     catch (const std::exception &e)
     {
-        //NOLINTNEXTLINE(misc-include-cleaner
-        auto consoleLogger = spdlog::stdout_color_st("console");
         SPDLOG_LOGGER_CRITICAL(consoleLogger,
                                "Failed to read program options because {}",
                                std::string {e.what()});
@@ -570,7 +626,7 @@ int main(int argc, char *argv[])
                overwrite);
     }
 
-    // Create the logger
+    // Create the real logger
     std::shared_ptr<spdlog::logger> logger{nullptr};
     try 
     {

@@ -72,10 +72,6 @@ configure_file(${CMAKE_SOURCE_DIR}/src/version.hpp.in
                ${CMAKE_SOURCE_DIR}/include/uDataPacketCacheService/version.hpp)
 
 set(LIBRARY_SRC
-    #src/circularBuffer.cpp
-    #src/circularBufferMap.cpp
-    #src/circularBufferMapOptions.cpp
-    #src/circularBufferOptions.cpp
     src/grpcClientOptions.cpp
     src/grpcServerOptions.cpp
     src/metricsSingleton.cpp
@@ -90,10 +86,6 @@ set(LIBRARY_SRC
     src/utilities.cpp
     src/version.cpp)
 set(LIBRARY_HEADER_FILES
-    #include/uDataPacketCacheService/circularBuffer.hpp
-    #include/uDataPacketCacheService/circularBufferMap.hpp
-    #include/uDataPacketCacheService/circularBufferMapOptions.hpp
-    #include/uDataPacketCacheService/circularBufferOptions.hpp
     include/uDataPacketCacheService/grpcClientOptions.hpp
     include/uDataPacketCacheService/grpcServerOptions.hpp
     include/uDataPacketCacheService/metricsSingleton.hpp

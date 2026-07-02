@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <stdexcept>
 #include <mutex>
 #include "uDataPacketCacheService/metricsSingleton.hpp"
 
@@ -122,6 +123,15 @@ double MetricsSingleton::getServiceUtilization() const noexcept
 }
 
 /// Clients
+void MetricsSingleton::setMaximumNumberOfClients(const int maxClients)
+{
+    if (maxClients < 1)
+    {
+        throw std::invalid_argument("Max clients must be positive");
+    }
+    mMaximumNumberOfClients = maxClients;
+}
+
 int MetricsSingleton::getMaximumNumberOfClients() const noexcept
 {
     return mMaximumNumberOfClients;
