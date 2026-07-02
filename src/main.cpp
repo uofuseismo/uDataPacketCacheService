@@ -20,7 +20,7 @@
 #endif
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/sinks/stdout_color_sinks.h> // NOLINT(misc-include-cleaner)
 #include <opentelemetry/metrics/provider.h>
 //#include <opentelemetry/metrics/meter.h>
 #include <oneapi/tbb/concurrent_queue.h>
@@ -331,12 +331,12 @@ public:
                     auto now = Utilities::getNow<std::chrono::nanoseconds> (); 
                     if (checkLatency)
                     {
-                        metrics.incrementInvalidPacketsReceivedCounter();
                         auto startTime
                             = Utilities::getStartTime<std::chrono::nanoseconds>
                               (packet);
                         if (startTime < now - maximumLatency)
                         {
+                            metrics.incrementInvalidPacketsReceivedCounter();
                             SPDLOG_LOGGER_DEBUG(mLogger,
                                 "Skipping {} because it is has expired data",
                                 Utilities::toString(packet.stream_identifier()));
