@@ -16,7 +16,7 @@
 #endif
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/sinks/stdout_color_sinks.h> //NOLINT
 #include <google/protobuf/util/time_util.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
@@ -217,11 +217,9 @@ public:
                                       + ")";
                     *response->mutable_identifier() = request.identifier();
                 }
-#ifndef NDEBUG
                 SPDLOG_LOGGER_DEBUG(mLogger,
                                     "Getting available streams for {}",
                                     requestIdentifier);
-#endif
                 // Do it
                 try
                 {
@@ -244,26 +242,23 @@ public:
                 }
                 mSuccess = true;
                 Finish(grpc::Status::OK);
-#ifndef NDEBUG
                 SPDLOG_LOGGER_DEBUG(mLogger,
                                     "Successfully found streams for {}",
                                     requestIdentifier);
-#endif
             }
         private:
             void OnDone() override
             {
-#ifndef NDEBUG
                 if (mLogger)
                 {
                     SPDLOG_LOGGER_DEBUG(mLogger,
                                         "GetAvailableStreams RPC completed");
                 }
-#endif
                 auto &metrics = MetricsSingleton::getInstance();
                 metrics.decrementNumberOfClients();
                 if (mSuccess)
                 {
+                    metrics.incrementSuccessfulRPCCounter();
                     auto endTime
                         = Utilities::getNow<std::chrono::nanoseconds> ();
                     auto elapsedTime
@@ -275,13 +270,11 @@ public:
             }
             void OnCancel() override
             {
-#ifndef NDEBUG
                 if (mLogger)
                 {
                    SPDLOG_LOGGER_DEBUG(mLogger,
                                        "GetAvailableStreams RPC canceled");
                 }
-#endif
             }
 //private:
             std::shared_ptr<spdlog::logger> mLogger{nullptr};
@@ -497,17 +490,16 @@ public:
         private:
             void OnDone() override
             {
-#ifndef NDEBUG
                 if (mLogger)
                 {
                     SPDLOG_LOGGER_DEBUG(mLogger,
                                         "GetTimeSeries RPC completed");
                 }
-#endif
                 auto &metrics = MetricsSingleton::getInstance();
                 metrics.decrementNumberOfClients();
                 if (mSuccess)
                 {
+                    metrics.incrementSuccessfulRPCCounter();
                     auto endTime
                         = Utilities::getNow<std::chrono::nanoseconds> ();
                     auto elapsedTime
@@ -519,13 +511,11 @@ public:
             }
             void OnCancel() override
             {
-#ifndef NDEBUG
                 if (mLogger)
                 {
                    SPDLOG_LOGGER_DEBUG(mLogger,
                                        "GetTimeSeries RPC canceled");
                 }
-#endif
             }
 //private:
             std::shared_ptr<spdlog::logger> mLogger{nullptr};

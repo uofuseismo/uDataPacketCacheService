@@ -313,6 +313,10 @@ TEST_CASE("UDataPacketCacheService", "[ServiceOptions]")
         REQUIRE_FALSE(options.hasGRPCOptions());
         REQUIRE(options.getMaximumRequestQueueSize() == 32);
         REQUIRE(options.getMaximumRequestMessageSizeInBytes() == 1024);
+        REQUIRE(options.getMaximumNumberOfConcurrentStreams() == 64); 
+        REQUIRE(options.getMaximumConnectionAge() == std::chrono::milliseconds {30000});
+        REQUIRE(options.getMaximumConnectionAgeGracePeriod() == std::chrono::milliseconds {1000});
+        REQUIRE(options.getCompressionAlgorithm() == ServiceOptions::CompressionAlgorithm::Deflate);
     }
 
     SECTION("Options")
@@ -321,6 +325,10 @@ TEST_CASE("UDataPacketCacheService", "[ServiceOptions]")
         constexpr uint16_t port{12343};
         constexpr int maxQueueSize{19};
         constexpr int maxMessageSize{301};
+        constexpr std::chrono::milliseconds maxAge{8331};
+        constexpr std::chrono::milliseconds maxGracePeriod{933};
+        constexpr auto algorithm{ServiceOptions::CompressionAlgorithm::None};
+        constexpr int nConcurrent{83};
         GRPCServerOptions grpcOptions;
         grpcOptions.setHost(host);
         grpcOptions.setPort(port);
@@ -328,15 +336,26 @@ TEST_CASE("UDataPacketCacheService", "[ServiceOptions]")
         ServiceOptions options;
         REQUIRE_THROWS(options.setMaximumRequestQueueSize(0));
         REQUIRE_THROWS(options.setMaximumRequestMessageSizeInBytes(0));
+        REQUIRE_THROWS(options.setMaximumNumberOfConcurrentStreams(0));
+        REQUIRE_THROWS(options.setMaximumConnectionAgeGracePeriod(std::chrono::milliseconds {-1}));
+        REQUIRE_THROWS(options.setMaximumConnectionAge(std::chrono::milliseconds {0}));
         options.setGRPCOptions(grpcOptions);
         options.setMaximumRequestQueueSize(maxQueueSize);
         options.setMaximumRequestMessageSizeInBytes(maxMessageSize);
+        options.setMaximumConnectionAge(maxAge);
+        options.setMaximumConnectionAgeGracePeriod(maxGracePeriod);
+        options.setMaximumNumberOfConcurrentStreams(nConcurrent);
+        options.setCompressionAlgorithm(algorithm);
 
         const ServiceOptions copy{options};
         REQUIRE(copy.getGRPCOptions().getHost() == host);
         REQUIRE(copy.getGRPCOptions().getPort() == port);
         REQUIRE(copy.getMaximumRequestQueueSize() == maxQueueSize);
         REQUIRE(copy.getMaximumRequestMessageSizeInBytes() == maxMessageSize);
+        REQUIRE(copy.getMaximumConnectionAge() == maxAge);
+        REQUIRE(copy.getMaximumConnectionAgeGracePeriod() == maxGracePeriod);
+        REQUIRE(copy.getMaximumNumberOfConcurrentStreams() == nConcurrent);
+        REQUIRE(copy.getCompressionAlgorithm() == algorithm);
     }
 
 }

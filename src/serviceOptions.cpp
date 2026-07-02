@@ -12,7 +12,7 @@ class ServiceOptions::ServiceOptionsImpl
 public:
     GRPCServerOptions mGRPCOptions; 
     std::chrono::milliseconds mMaximumConnectionAge{std::chrono::seconds {30}};
-    std::chrono::milliseconds mMaximumGracePeriod{1};
+    std::chrono::milliseconds mMaximumGracePeriod{std::chrono::seconds{1}};
     CompressionAlgorithm mCompressionAlgorithm{CompressionAlgorithm::Deflate};
     int mMaximumRequestQueueSize{32}; 
     int mMaximumRequestMessageSizeInBytes{1024};

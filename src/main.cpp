@@ -26,7 +26,6 @@
 #include <oneapi/tbb/concurrent_queue.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include "uDataPacketCacheService/streamDequeMap.hpp"
-#include "uDataPacketCacheService/streamDequeMapOptions.hpp"
 #include "uDataPacketCacheService/service.hpp"
 #include "uDataPacketCacheService/subscriber.hpp"
 #include "uDataPacketCacheService/metricsSingleton.hpp"
@@ -400,17 +399,10 @@ public:
         auto nTotalRequests = nSuccessfulRequests
                             + nInvalidRequests
                             + nServerErrors;
-        auto nClients = metrics.getNumberOfClients();
-        auto utilization = metrics.getServiceUtilization();
+        //auto nClients = metrics.getNumberOfClients();
+        //auto utilization = metrics.getServiceUtilization();
         auto nPacketsReport = nPacketsReceived - mPacketsReceivedLastReport; 
-        SPDLOG_LOGGER_INFO(mLogger,
-R""""(
-Since last report:
-    Received {} packets ({} were invalid and lost {} due to buffer overflow).
-    Rejected {} accesses.
-    Processed {} requests of which {} succeeded, {} were invalid, and {} failed.
-    Currently servicing {} clients (Service is {} utilized).
-)"""",
+        SPDLOG_LOGGER_INFO(mLogger, "Since last report: Received {} packets ({} invalid, {} lost due to buffer overflow).  Rejected {} accesses.  Processed {} requests ({} succeeded, {} invalid, {} failed).",
            nPacketsReceived - mPacketsReceivedLastReport,
            nInvalidPackets - mInvalidPacketsLastReport, 
            nOverflow - mOverflowLastReport, 
@@ -418,8 +410,9 @@ Since last report:
            nTotalRequests - mTotalRequestsLastReport,
            nSuccessfulRequests - mSuccessfulRequestsLastReport,
            nInvalidRequests - mInvalidRequestsLastReport,
-           nServerErrors - mServerErrorsLastReport,
-           nClients, utilization); 
+           nServerErrors - mServerErrorsLastReport
+           //nClients, utilization
+           ); 
         mPacketsReceivedLastReport = nPacketsReceived;
         mInvalidPacketsLastReport = nInvalidPackets; 
         mOverflowLastReport = nOverflow;
