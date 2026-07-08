@@ -41,7 +41,7 @@ public:
     void addPacket(const UDataPacketServiceAPI::V1::Packet &packet);
 
     /// @brief Cleans out expired packets from the stream deques.
-    uint32_t removeExpiredPackets();
+    uint32_t removeExpiredPackets(const std::chrono::nanoseconds &oldestTime);
 
     /// @result True indicates the stream exists.
     [[nodiscard]] bool exists(const std::string &identifier) const noexcept;

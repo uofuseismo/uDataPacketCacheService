@@ -606,20 +606,18 @@ public:
         SPDLOG_LOGGER_INFO(mLogger,
                            "DataPacketCacheService listening at {}", address);
         mServer = builder.BuildAndStart();
+        mServerStarted.store(true);
         mServer->Wait();
-        mStarted = true;
+        mServerStarted.store(false);
     }
 
     void stop()
     {
         mKeepRunning.store(false);
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
-        if (mServer)
+        if (mServer && mServerStarted.load())
         {
-            if (mStarted)
-            {
-                SPDLOG_LOGGER_INFO(mLogger, "Shutting down service");
-            }
+            SPDLOG_LOGGER_INFO(mLogger, "Shutting down service");
             constexpr int64_t timeOutSeconds{1};
             constexpr int64_t timeOutNanoSeconds{0};
             const gpr_timespec deadline // NOLINT
@@ -629,13 +627,10 @@ public:
                 GPR_TIMESPAN // NOLINT
             };
             mServer->Shutdown(deadline);
-            if (mStarted)
-            {
-                SPDLOG_LOGGER_INFO(mLogger, "Service shut down");
-            }
+            SPDLOG_LOGGER_INFO(mLogger, "Service shut down");
             mServer = nullptr;
         }
-        mStarted = false;
+        mServerStarted.store(false);
     }
 
     ~ServiceImpl() override
@@ -656,7 +651,7 @@ public:
     std::atomic<bool> mKeepRunning{true};
     int mMaximumNumberOfClients{64};
     bool mSecured{false};
-    bool mStarted{false};
+    std::atomic<bool> mServerStarted{false};
 };
 
 /// Constructor

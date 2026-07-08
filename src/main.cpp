@@ -280,7 +280,9 @@ public:
         {
             try
             {
-                auto nRemoved = mStreamDequeMap->removeExpiredPackets();
+                auto oldestTime = Utilities::getNow<std::chrono::nanoseconds> ()
+                                - mOptions.streamDequeMapOptions.getMaximumDuration();
+                auto nRemoved = mStreamDequeMap->removeExpiredPackets(oldestTime);
                 metrics.incrementPacketsRemovedCounter(nRemoved);
                 nConsecutiveErrors = 0;
             }

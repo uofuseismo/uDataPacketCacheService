@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
-#include <limits>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -16,7 +16,6 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-#include <oneapi/tbb/concurrent_map.h>
 #include <uDataPacketServiceAPI/v1/packet.pb.h>
 #include <uDataPacketServiceAPI/v1/stream_identifier.pb.h>
 #include <uDataPacketCacheServiceAPI/v1/packet.pb.h>
@@ -50,6 +49,8 @@ public:
     void addPacket(UDataPacketServiceAPI::V1::Packet &&packet)
     {
         auto streamIdentifier = Utilities::toString(packet.stream_identifier());
+        {
+        const std::lock_guard<std::mutex> lock(mMutex);
         auto idx = mStreamDequeMap.find(streamIdentifier);
         if (idx != mStreamDequeMap.end())
         {
@@ -58,7 +59,7 @@ public:
         }
         // Okay do this the hard way
 // TODO should make this an option that comes in instead of relying on default
-        StreamDequeOptions options;
+        const StreamDequeOptions options;
         //options.setMaximumNumberOfPackets(std::numeric_limits<uint16_t>::max());
         auto streamDeque
             = std::make_unique<StreamDeque> (options, std::move(packet));
@@ -71,20 +72,24 @@ public:
             throw std::runtime_error("Failed to add stream deque for "
                                    + streamIdentifier);
         }
+        }
         SPDLOG_LOGGER_INFO(mLogger,
                            "Added {} to deque map",
                            streamIdentifier);
     }
 
-    [[nodiscard]] uint32_t removeExpiredPackets()
+    [[nodiscard]] uint32_t removeExpiredPackets(const std::chrono::nanoseconds &oldestTime)
     {
         uint32_t nRemoved{0};
-        auto oldestTime = Utilities::getNow<std::chrono::nanoseconds> ()
-                        - mOptions.getMaximumDuration();
+        //auto oldestTime = Utilities::getNow<std::chrono::nanoseconds> ()
+        //                - mOptions.getMaximumDuration();
+        {
+        const std::lock_guard<std::mutex> lock(mMutex);
         for (auto &it : mStreamDequeMap)
         {
             nRemoved = nRemoved
                      + it.second->removeExpiredPackets(oldestTime);
+        }
         }
         return nRemoved;
     }
@@ -96,10 +101,13 @@ public:
     {
         auto streamIdentifier = Utilities::toString(identifier);
         std::vector<UDataPacketCacheServiceAPI::V1::Packet> result;
+        {
+        const std::lock_guard<std::mutex> lock(mMutex);
         const auto idx = mStreamDequeMap.find(streamIdentifier);
         if (idx != mStreamDequeMap.end())
         {
             result = idx->second->getPackets(startAndEndTime);
+        }
         }
         return result; 
     }
@@ -108,6 +116,8 @@ public:
         getAvailableStreams() const
     {
         std::vector<std::string> streamNames;
+        {
+        const std::lock_guard<std::mutex> lock(mMutex);
         streamNames.reserve(mStreamDequeMap.size());
         for (const auto &idx : mStreamDequeMap)
         {
@@ -120,6 +130,7 @@ public:
                                 }));
 #endif
             streamNames.push_back(idx.first); 
+        }
         }
         // Now build the streams
         std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> result;
@@ -137,8 +148,8 @@ public:
 //public: 
     StreamDequeMapOptions mOptions;
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
-    std::mutex mMutex;
-    oneapi::tbb::concurrent_map
+    mutable std::mutex mMutex;
+    std::map
     <
         std::string,
         std::unique_ptr<StreamDeque>
@@ -166,9 +177,10 @@ void StreamDequeMap::addPacket(
 }
 
 /// Remove expired packets
-uint32_t StreamDequeMap::removeExpiredPackets()
+uint32_t StreamDequeMap::removeExpiredPackets(
+    const std::chrono::nanoseconds &oldestTime)
 {
-    return pImpl->removeExpiredPackets();
+    return pImpl->removeExpiredPackets(oldestTime);
 }
 
 std::vector<UDataPacketCacheServiceAPI::V1::StreamIdentifier> 
