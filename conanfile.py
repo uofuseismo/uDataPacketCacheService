@@ -26,7 +26,7 @@ class uDataPacketCacheConan(ConanFile):
 
    def requirements(self):
        # dependencies
-       self.requires("grpc/1.81.0")
+       self.requires("grpc/1.82.0")
        self.requires("opentelemetry-cpp/1.26.0")
        self.requires("protobuf/6.33.5")
        self.requires("boost/1.89.0")
