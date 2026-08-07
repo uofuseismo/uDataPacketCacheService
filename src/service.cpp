@@ -157,9 +157,12 @@ public:
         if (mLogger == nullptr)
         {
             // NOLINTBEGIN(misc-include-cleaner)
-            auto classId
-                = std::to_string (reinterpret_cast<std::uintptr_t> (this));
-            mLogger = spdlog::stdout_color_mt("ServiceConsole-" + classId);
+            constexpr const char *loggerName{"ServiceConsole"};
+            mLogger = spdlog::get(loggerName);
+            if (mLogger == nullptr)
+            {
+                mLogger = spdlog::stdout_color_mt(loggerName);
+            }
             // NOLINTEND(misc-include-cleaner)
         }
         mMaximumNumberOfClients
